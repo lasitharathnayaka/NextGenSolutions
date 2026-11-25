@@ -22,16 +22,20 @@ import {
   MessageSquare,
   X,
   Send,
+  Sparkles,
 } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { cn } from '@/lib/utils';
 
 type SortOption = 'featured' | 'price-asc' | 'price-desc' | 'name';
 type ViewMode = 'grid' | 'list';
+type SoftwareCategory = 'All' | 'OS' | 'Productivity' | 'Security' | 'Creative & Dev';
 
 interface SoftwareLicense {
   id: string;
   name: string;
+  vendor: string;
+  category: Exclude<SoftwareCategory, 'All'>;
   platform: string;
   description: string;
   features: string[];
@@ -41,12 +45,15 @@ interface SoftwareLicense {
   accentBg: string;
   accentText: string;
   isWideFeatured?: boolean;
+  popularTag?: string;
 }
 
 const SOFTWARE_LICENSES: SoftwareLicense[] = [
   {
     id: 'windows-11-pro',
     name: 'Windows 11 Pro',
+    vendor: 'Microsoft · Lifetime Retail',
+    category: 'OS',
     platform: 'Windows Platform',
     description:
       'Lifetime 1-PC Retail Key with full Microsoft updates and direct activation.',
@@ -58,12 +65,15 @@ const SOFTWARE_LICENSES: SoftwareLicense[] = [
     priceLabel: 'Retail Price',
     price: 199,
     icon: 'monitor',
-    accentBg: 'bg-sky-50',
+    accentBg: 'bg-sky-50 border border-sky-100',
     accentText: 'text-sky-600',
+    popularTag: 'Best Seller',
   },
   {
     id: 'microsoft-office-2024-pro',
     name: 'Microsoft Office 2024 Pro Plus',
+    vendor: 'Microsoft · Lifetime Suite',
+    category: 'Productivity',
     platform: 'Win / Mac',
     description:
       'Lifetime 1-PC Retail Key including Word, Excel, PowerPoint, and Outlook.',
@@ -75,12 +85,14 @@ const SOFTWARE_LICENSES: SoftwareLicense[] = [
     priceLabel: 'Retail Price',
     price: 249,
     icon: 'office',
-    accentBg: 'bg-orange-50',
+    accentBg: 'bg-orange-50 border border-orange-100',
     accentText: 'text-orange-600',
   },
   {
     id: 'kaspersky-total-security',
     name: 'Kaspersky Total Security',
+    vendor: 'Kaspersky · 5-Device Shield',
+    category: 'Security',
     platform: 'Multi-Platform',
     description:
       '1-Year Subscription for up to 5 Devices with premium cyber defense.',
@@ -92,12 +104,14 @@ const SOFTWARE_LICENSES: SoftwareLicense[] = [
     priceLabel: 'Annual Price',
     price: 79.99,
     icon: 'shield',
-    accentBg: 'bg-emerald-50',
+    accentBg: 'bg-emerald-50 border border-emerald-100',
     accentText: 'text-emerald-600',
   },
   {
     id: 'adobe-creative-cloud',
     name: 'Adobe Creative Cloud Suite',
+    vendor: 'Adobe · All Apps Pass',
+    category: 'Creative & Dev',
     platform: 'Win / macOS',
     description:
       '1-Year Full Access Pass to 20+ creative applications including Photoshop & Premiere.',
@@ -109,12 +123,14 @@ const SOFTWARE_LICENSES: SoftwareLicense[] = [
     priceLabel: 'Annual Price',
     price: 599,
     icon: 'palette',
-    accentBg: 'bg-rose-50',
+    accentBg: 'bg-rose-50 border border-rose-100',
     accentText: 'text-rose-600',
   },
   {
     id: 'visual-studio-2022-enterprise',
     name: 'Visual Studio 2022 Enterprise',
+    vendor: 'Microsoft · Enterprise DevOps',
+    category: 'Creative & Dev',
     platform: 'Windows Enterprise',
     description:
       'Lifetime Subscription & Developer Tools for scalable enterprise engineering teams.',
@@ -126,14 +142,41 @@ const SOFTWARE_LICENSES: SoftwareLicense[] = [
     priceLabel: 'Retail Price',
     price: 2999,
     icon: 'code',
-    accentBg: 'bg-indigo-50',
+    accentBg: 'bg-indigo-50 border border-indigo-100',
     accentText: 'text-indigo-600',
     isWideFeatured: true,
+    popularTag: 'Enterprise Pick',
   },
 ];
 
-const MASKED_KEY = 'XXXXX-XXXXX-XXXXX-89A2F';
-const REVEALED_KEY = 'W11P8-9K4M2-7Q9X3-89A2F';
+const CATEGORIES: SoftwareCategory[] = [
+  'All',
+  'OS',
+  'Productivity',
+  'Security',
+  'Creative & Dev',
+];
+
+const VAULT_INSTANCES = [
+  {
+    id: 'win11',
+    label: 'Windows 11 Pro - Workstation',
+    masked: 'XXXXX-XXXXX-XXXXX-89A2F',
+    full: 'W11P8-9K4M2-7Q9X3-89A2F',
+    installer: 'Official ISO Installer',
+    cdn: 'Direct Microsoft CDN (5.1 GB)',
+    hwId: 'WIN-8849-PRO',
+  },
+  {
+    id: 'office24',
+    label: 'Office 2024 Pro Plus - Seat #1',
+    masked: 'XXXXX-XXXXX-XXXXX-4419B',
+    full: 'OFF24-7N2V9-5P8C1-4419B',
+    installer: 'Offline Click-to-Run',
+    cdn: 'Direct Microsoft CDN (3.8 GB)',
+    hwId: 'OFF-2024-ENT',
+  },
+];
 
 function LicenseIcon({ type }: { type: SoftwareLicense['icon'] }) {
   switch (type) {
@@ -152,11 +195,13 @@ function LicenseIcon({ type }: { type: SoftwareLicense['icon'] }) {
 
 export function SoftwarePage() {
   const { addToCart } = useCart();
+  const [selectedCategory, setSelectedCategory] = useState<SoftwareCategory>('All');
   const [sortBy, setSortBy] = useState<SortOption>('featured');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [recentlyAdded, setRecentlyAdded] = useState<Record<string, boolean>>({});
 
   // Vault state
+  const [vaultIdx, setVaultIdx] = useState(0);
   const [keyRevealed, setKeyRevealed] = useState(false);
   const [copiedNotice, setCopiedNotice] = useState(false);
   const [downloadStarted, setDownloadStarted] = useState(false);
@@ -171,8 +216,14 @@ export function SoftwarePage() {
     },
   ]);
 
-  const sortedLicenses = useMemo(() => {
-    const list = [...SOFTWARE_LICENSES];
+  const activeVault = VAULT_INSTANCES[vaultIdx];
+
+  const filteredAndSortedLicenses = useMemo(() => {
+    const filtered = SOFTWARE_LICENSES.filter((item) =>
+      selectedCategory === 'All' ? true : item.category === selectedCategory,
+    );
+
+    const list = [...filtered];
     switch (sortBy) {
       case 'price-asc':
         list.sort((a, b) => a.price - b.price);
@@ -188,7 +239,7 @@ export function SoftwarePage() {
         break;
     }
     return list;
-  }, [sortBy]);
+  }, [selectedCategory, sortBy]);
 
   const handleBuyLicense = (license: SoftwareLicense) => {
     addToCart({
@@ -207,7 +258,7 @@ export function SoftwarePage() {
     if (!keyRevealed) {
       setKeyRevealed(true);
       try {
-        await navigator.clipboard.writeText(REVEALED_KEY);
+        await navigator.clipboard.writeText(activeVault.full);
       } catch {
         // Fallback when clipboard is restricted
       }
@@ -232,7 +283,7 @@ export function SoftwarePage() {
       { sender: 'user', text: trimmed },
       {
         sender: 'engineer',
-        text: 'Thanks! Your activation ticket has been prioritized for Hardware ID WIN-8849-PRO. A live technician will reply here in under 2 minutes.',
+        text: `Thanks! Your activation ticket has been prioritized for Hardware ID ${activeVault.hwId}. A live technician will reply here in under 2 minutes.`,
       },
     ]);
     setChatInput('');
@@ -240,58 +291,113 @@ export function SoftwarePage() {
 
   return (
     <div className="bg-[#f8fafc]">
-      {/* Dark Trust Strip Directly Below Navbar */}
-      <div className="bg-[#111c2d] border-b border-slate-800/80">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-2.5 text-[11px] font-medium text-slate-200 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-            <span>100% Genuine Verified Enterprise Licenses</span>
+      {/* Modern Dark-Navy Software Hero Banner */}
+      <section className="relative overflow-hidden bg-[#0a1220] border-b border-slate-800/80 py-8 sm:py-10">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-sky-500/15 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, rgba(56, 189, 248, 0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(56, 189, 248, 0.05) 1px, transparent 1px)',
+            backgroundSize: '36px 36px',
+          }}
+          className="pointer-events-none absolute inset-0"
+        />
+
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          {/* Breadcrumb */}
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs">
+            <Link to="/" className="text-slate-400 hover:text-sky-400 transition">
+              Home
+            </Link>
+            <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
+            <Link
+              to="/catalog"
+              className="text-slate-400 hover:text-sky-400 transition"
+            >
+              Catalog
+            </Link>
+            <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
+            <span className="font-semibold text-sky-400">
+              Software &amp; Digital Licenses
+            </span>
+          </nav>
+
+          <div className="mt-4 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+            <div>
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                <Sparkles className="h-3 w-3" />
+                <span>Instant Vault Key Delivery</span>
+              </div>
+              <h1 className="mt-2.5 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+                Software &amp; Digital Licenses
+              </h1>
+              <p className="mt-1.5 max-w-xl text-xs leading-relaxed text-slate-400">
+                100% genuine, OEM &amp; retail-verified enterprise licenses
+                delivered directly to your encrypted License Vault with 24/7
+                activation engineering support.
+              </p>
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="flex flex-wrap items-center gap-2">
+              {CATEGORIES.map((cat) => {
+                const isSelected = selectedCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat)}
+                    className={cn(
+                      'rounded-full px-3.5 py-1.5 text-xs font-semibold transition cursor-pointer',
+                      isSelected
+                        ? 'bg-[#0284c7] text-white shadow-sm shadow-sky-500/25'
+                        : 'border border-slate-700/80 bg-[#121e31] text-slate-300 hover:border-slate-600 hover:text-white',
+                    )}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Zap className="h-3.5 w-3.5 text-sky-400" />
-            <span>Instant Email &amp; Dashboard Key Delivery</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Headphones className="h-3.5 w-3.5 text-sky-400" />
-            <span>24/7 Technical Activation Support</span>
+
+          {/* Trust Pills Strip */}
+          <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-slate-800/80 pt-4 text-[11px] font-medium text-slate-300">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+              <span>100% Genuine Verified Enterprise Licenses</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Zap className="h-3.5 w-3.5 text-sky-400" />
+              <span>Instant Email &amp; Dashboard Key Delivery</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Headphones className="h-3.5 w-3.5 text-sky-400" />
+              <span>24/7 Technical Activation Support</span>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* Main Content Container */}
-      <div className="mx-auto max-w-7xl px-4 pt-5 pb-14 sm:px-6 lg:px-8">
-        {/* Breadcrumb */}
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs">
-          <Link
-            to="/catalog"
-            className="text-slate-400 hover:text-slate-700 transition"
-          >
-            Catalog
-          </Link>
-          <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-          <span className="text-slate-400">Digital Software</span>
-          <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
-          <span className="font-semibold text-[#0284c7]">Licenses</span>
-        </nav>
-
-        {/* Page Title & Controls Row */}
-        <div className="mt-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
-              Software &amp; Digital Licenses
-            </h1>
-            <p className="mt-1 text-xs text-slate-500">
-              Showing {sortedLicenses.length} authentic enterprise &amp;
-              professional software licenses ready for instant deployment.
-            </p>
-          </div>
+      <div className="mx-auto max-w-7xl px-4 pt-6 pb-16 sm:px-6 lg:px-8">
+        {/* Toolbar */}
+        <div className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-5 py-3.5 shadow-2xs sm:flex-row sm:items-center">
+          <p className="text-xs font-bold text-slate-900">
+            Showing {filteredAndSortedLicenses.length} authentic software license
+            {filteredAndSortedLicenses.length !== 1 ? 's' : ''}
+          </p>
 
           <div className="flex items-center gap-2.5 self-start sm:self-auto">
             <select
               aria-label="Sort software licenses"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-2xs focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 cursor-pointer"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 cursor-pointer"
             >
               <option value="featured">Sort by: Featured</option>
               <option value="price-asc">Sort by: Price Low to High</option>
@@ -299,7 +405,7 @@ export function SoftwarePage() {
               <option value="name">Sort by: Name A to Z</option>
             </select>
 
-            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
+            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
               <button
                 type="button"
                 onClick={() => setViewMode('grid')}
@@ -307,7 +413,7 @@ export function SoftwarePage() {
                 className={cn(
                   'rounded-md p-1.5 transition cursor-pointer',
                   viewMode === 'grid'
-                    ? 'bg-slate-100 text-slate-900'
+                    ? 'bg-white text-slate-900 shadow-2xs'
                     : 'text-slate-400 hover:text-slate-700',
                 )}
               >
@@ -320,7 +426,7 @@ export function SoftwarePage() {
                 className={cn(
                   'rounded-md p-1.5 transition cursor-pointer',
                   viewMode === 'list'
-                    ? 'bg-slate-100 text-slate-900'
+                    ? 'bg-white text-slate-900 shadow-2xs'
                     : 'text-slate-400 hover:text-slate-700',
                 )}
               >
@@ -342,12 +448,13 @@ export function SoftwarePage() {
                   : 'grid-cols-1',
               )}
             >
-              {sortedLicenses.map((license) => {
+              {filteredAndSortedLicenses.map((license) => {
                 const isAdded = Boolean(recentlyAdded[license.id]);
                 const renderWide =
                   viewMode === 'list' ||
                   (viewMode === 'grid' &&
                     sortBy === 'featured' &&
+                    selectedCategory === 'All' &&
                     license.isWideFeatured);
 
                 if (renderWide) {
@@ -355,42 +462,49 @@ export function SoftwarePage() {
                     <article
                       key={license.id}
                       className={cn(
-                        'rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs hover:border-slate-300 hover:shadow-md transition',
+                        'group rounded-2xl border border-slate-200/80 bg-white p-6 shadow-2xs hover:-translate-y-0.5 hover:border-sky-300/80 hover:shadow-xl hover:shadow-slate-200/60 transition duration-300',
                         viewMode === 'grid' && 'md:col-span-2',
                       )}
                     >
                       <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
                         <div className="flex-1">
                           <div className="flex items-start justify-between gap-3">
-                            <span
-                              className={cn(
-                                'flex h-10 w-10 items-center justify-center rounded-lg',
-                                license.accentBg,
-                                license.accentText,
-                              )}
-                            >
-                              <LicenseIcon type={license.icon} />
-                            </span>
+                            <div className="flex items-center gap-3">
+                              <span
+                                className={cn(
+                                  'flex h-11 w-11 items-center justify-center rounded-xl',
+                                  license.accentBg,
+                                  license.accentText,
+                                )}
+                              >
+                                <LicenseIcon type={license.icon} />
+                              </span>
+                              <div>
+                                <span className="block text-[10px] font-bold uppercase tracking-wider text-sky-600">
+                                  {license.vendor}
+                                </span>
+                                <h2 className="mt-0.5 text-sm font-bold text-slate-900">
+                                  {license.name}
+                                </h2>
+                              </div>
+                            </div>
 
                             <div className="text-right">
-                              <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
                                 <Zap className="h-3 w-3" />
                                 <span>Instant Key</span>
                               </span>
-                              <p className="mt-1 text-[10px] text-slate-400">
+                              <p className="mt-1 text-[10px] font-medium text-slate-400">
                                 {license.platform}
                               </p>
                             </div>
                           </div>
 
-                          <h2 className="mt-3.5 text-sm font-bold text-slate-900">
-                            {license.name}
-                          </h2>
-                          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                          <p className="mt-3 text-xs leading-relaxed text-slate-500">
                             {license.description}
                           </p>
 
-                          <ul className="mt-3.5 flex flex-wrap gap-x-5 gap-y-1.5 text-[11px] text-slate-600">
+                          <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-[11px] font-medium text-slate-600">
                             {license.features.map((feat) => (
                               <li key={feat} className="inline-flex items-center gap-1.5">
                                 <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
@@ -402,12 +516,12 @@ export function SoftwarePage() {
 
                         <div className="hidden md:block w-px self-stretch bg-slate-100" />
 
-                        <div className="flex items-end justify-between gap-3 border-t border-slate-100 pt-4 md:min-w-[165px] md:flex-col md:items-end md:justify-center md:border-t-0 md:pt-0">
+                        <div className="flex items-end justify-between gap-3 border-t border-slate-100 pt-4 md:min-w-[175px] md:flex-col md:items-end md:justify-center md:border-t-0 md:pt-0">
                           <div className="md:text-right">
-                            <p className="text-[10px] text-slate-400">
+                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                               {license.priceLabel}
                             </p>
-                            <p className="text-lg font-extrabold text-slate-900">
+                            <p className="text-xl font-extrabold text-slate-900">
                               $
                               {license.price.toLocaleString('en-US', {
                                 minimumFractionDigits: 2,
@@ -420,10 +534,10 @@ export function SoftwarePage() {
                             type="button"
                             onClick={() => handleBuyLicense(license)}
                             className={cn(
-                              'inline-flex items-center justify-center gap-1.5 rounded-md px-4 py-2 text-xs font-semibold text-white transition cursor-pointer md:w-full',
+                              'inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-xs font-bold text-white shadow-xs transition cursor-pointer md:w-full',
                               isAdded
                                 ? 'bg-emerald-600'
-                                : 'bg-[#0284c7] hover:bg-[#0369a1]',
+                                : 'bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] hover:from-[#0369a1] hover:to-[#0284c7]',
                             )}
                           >
                             {isAdded ? (
@@ -447,13 +561,13 @@ export function SoftwarePage() {
                 return (
                   <article
                     key={license.id}
-                    className="flex flex-col rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs hover:border-slate-300 hover:shadow-md transition"
+                    className="group flex flex-col rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs hover:-translate-y-1 hover:border-sky-300/80 hover:shadow-xl hover:shadow-slate-200/60 transition duration-300"
                   >
                     {/* Top Icon & Platform Badge */}
                     <div className="flex items-start justify-between gap-3">
                       <span
                         className={cn(
-                          'flex h-10 w-10 items-center justify-center rounded-lg',
+                          'flex h-11 w-11 items-center justify-center rounded-xl',
                           license.accentBg,
                           license.accentText,
                         )}
@@ -462,18 +576,21 @@ export function SoftwarePage() {
                       </span>
 
                       <div className="text-right">
-                        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-600">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
                           <Zap className="h-3 w-3" />
                           <span>Instant Key</span>
                         </span>
-                        <p className="mt-1 text-[10px] text-slate-400">
+                        <p className="mt-1 text-[10px] font-medium text-slate-400">
                           {license.platform}
                         </p>
                       </div>
                     </div>
 
-                    {/* Title & Description */}
-                    <h2 className="mt-4 text-sm font-bold text-slate-900">
+                    {/* Vendor Eyebrow + Title */}
+                    <span className="mt-4 text-[10px] font-bold uppercase tracking-wider text-sky-600">
+                      {license.vendor}
+                    </span>
+                    <h2 className="mt-0.5 text-[15px] font-bold text-slate-900">
                       {license.name}
                     </h2>
                     <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
@@ -481,10 +598,12 @@ export function SoftwarePage() {
                     </p>
 
                     {/* Features List */}
-                    <ul className="mt-4 space-y-1.5 text-[11px] text-slate-600">
+                    <ul className="mt-4 space-y-2 text-[11px] font-medium text-slate-600">
                       {license.features.map((feat) => (
-                        <li key={feat} className="flex items-center gap-1.5">
-                          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                        <li key={feat} className="flex items-center gap-2">
+                          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                            <Check className="h-2.5 w-2.5" />
+                          </span>
                           <span>{feat}</span>
                         </li>
                       ))}
@@ -493,10 +612,10 @@ export function SoftwarePage() {
                     {/* Footer Price & CTA */}
                     <div className="mt-auto flex items-end justify-between gap-3 border-t border-slate-100 pt-4 mt-5">
                       <div>
-                        <p className="text-[10px] text-slate-400">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                           {license.priceLabel}
                         </p>
-                        <p className="text-base font-extrabold text-slate-900">
+                        <p className="text-lg font-extrabold text-slate-900">
                           $
                           {license.price.toLocaleString('en-US', {
                             minimumFractionDigits: 2,
@@ -509,10 +628,10 @@ export function SoftwarePage() {
                         type="button"
                         onClick={() => handleBuyLicense(license)}
                         className={cn(
-                          'inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-xs font-semibold text-white transition cursor-pointer',
+                          'inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer',
                           isAdded
                             ? 'bg-emerald-600'
-                            : 'bg-[#0284c7] hover:bg-[#0369a1]',
+                            : 'bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] hover:from-[#0369a1] hover:to-[#0284c7]',
                         )}
                       >
                         {isAdded ? (
@@ -537,19 +656,42 @@ export function SoftwarePage() {
           {/* Right Sidebar: My License Vault + Activation Assistance */}
           <aside className="space-y-4 lg:col-span-4 lg:sticky lg:top-20">
             {/* Dark Navy License Vault Card */}
-            <div className="rounded-xl border border-slate-800 bg-[#0d1726] p-5 text-white shadow-lg">
-              <div className="flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-[#0284c7] px-2.5 py-1 text-[10px] font-bold text-white">
+            <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-[#0d1726] p-5 text-white shadow-xl">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-sky-500/15 blur-2xl"
+              />
+
+              <div className="relative flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] px-3 py-1 text-[10px] font-bold text-white shadow-xs">
                   <Lock className="h-3 w-3" />
                   <span>My License Vault</span>
                 </span>
-                <span className="text-[11px] font-medium text-slate-400">
-                  Active Instance
-                </span>
+                <div className="flex items-center gap-1 rounded-lg bg-[#142033] p-0.5 border border-slate-800">
+                  {VAULT_INSTANCES.map((inst, idx) => (
+                    <button
+                      key={inst.id}
+                      type="button"
+                      onClick={() => {
+                        setVaultIdx(idx);
+                        setKeyRevealed(false);
+                        setCopiedNotice(false);
+                      }}
+                      className={cn(
+                        'rounded-md px-2 py-0.5 text-[10px] font-semibold transition cursor-pointer',
+                        idx === vaultIdx
+                          ? 'bg-[#0284c7] text-white'
+                          : 'text-slate-400 hover:text-white',
+                      )}
+                    >
+                      #{idx + 1}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <h2 className="mt-4 text-sm font-bold text-white">
-                Windows 11 Pro - Workstation
+                {activeVault.label}
               </h2>
               <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
                 Your purchased license key is securely encrypted and stored in
@@ -557,28 +699,28 @@ export function SoftwarePage() {
               </p>
 
               {/* Product License Key Box */}
-              <div className="mt-4 rounded-lg border border-slate-700/70 bg-[#142033] p-3.5">
+              <div className="mt-4 rounded-xl border border-slate-700/70 bg-[#142033] p-3.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
                     Product License Key
                   </span>
-                  <span className="rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
                     Verified
                   </span>
                 </div>
 
-                <div className="mt-2.5 rounded-md border border-slate-800 bg-[#09101c] px-3 py-2.5 text-center font-mono text-xs tracking-widest text-slate-100 select-all">
-                  {keyRevealed ? REVEALED_KEY : MASKED_KEY}
+                <div className="mt-2.5 rounded-lg border border-slate-800 bg-[#09101c] px-3 py-2.5 text-center font-mono text-xs tracking-widest text-slate-100 select-all">
+                  {keyRevealed ? activeVault.full : activeVault.masked}
                 </div>
 
                 <button
                   type="button"
                   onClick={handleRevealAndCopy}
                   className={cn(
-                    'mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-md py-2 text-xs font-semibold text-white transition cursor-pointer',
+                    'mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition cursor-pointer',
                     copiedNotice
                       ? 'bg-emerald-600'
-                      : 'bg-[#0284c7] hover:bg-[#0369a1]',
+                      : 'bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] hover:from-[#0369a1] hover:to-[#0284c7]',
                   )}
                 >
                   {copiedNotice ? (
@@ -601,17 +743,17 @@ export function SoftwarePage() {
               </div>
 
               {/* Official ISO Installer Box */}
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-slate-700/70 bg-[#142033] p-3">
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-700/70 bg-[#142033] p-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-slate-800 text-slate-300">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-sky-400">
                     <Download className="h-4 w-4" />
                   </span>
                   <div>
                     <p className="text-xs font-bold text-white">
-                      Official ISO Installer
+                      {activeVault.installer}
                     </p>
                     <p className="text-[10px] text-slate-400">
-                      Direct Microsoft CDN (5.1 GB)
+                      {activeVault.cdn}
                     </p>
                   </div>
                 </div>
@@ -619,7 +761,7 @@ export function SoftwarePage() {
                 <button
                   type="button"
                   onClick={handleDownloadIso}
-                  className="shrink-0 text-xs font-semibold text-sky-400 hover:text-sky-300 transition cursor-pointer"
+                  className="shrink-0 rounded-md bg-sky-500/15 px-2.5 py-1 text-[11px] font-semibold text-sky-400 hover:bg-sky-500/25 transition cursor-pointer"
                 >
                   {downloadStarted ? 'Starting...' : 'Download'}
                 </button>
@@ -628,7 +770,7 @@ export function SoftwarePage() {
               {/* Hardware ID Footer */}
               <div className="mt-4 flex items-center justify-between border-t border-slate-800 pt-3 text-[10px]">
                 <span className="font-mono text-slate-400">
-                  Hardware ID: WIN-8849-PRO
+                  Hardware ID: {activeVault.hwId}
                 </span>
                 <span className="inline-flex items-center gap-1 font-semibold text-emerald-400">
                   <CheckCircle2 className="h-3 w-3" />
@@ -638,21 +780,23 @@ export function SoftwarePage() {
             </div>
 
             {/* Activation Assistance Card */}
-            <div className="rounded-xl border border-slate-200/90 bg-white p-5 shadow-2xs">
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
               <div className="flex items-center gap-2">
-                <HelpCircle className="h-4 w-4 text-[#0284c7]" />
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-50 text-[#0284c7]">
+                  <HelpCircle className="h-4 w-4" />
+                </span>
                 <h3 className="text-xs font-bold text-slate-900">
                   Need Activation Assistance?
                 </h3>
               </div>
-              <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
                 Our specialized engineers are available around the clock to
                 assist with phone or digital token activations.
               </p>
               <button
                 type="button"
                 onClick={() => setChatOpen(true)}
-                className="mt-3.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition cursor-pointer"
+                className="mt-3.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 py-2.5 text-xs font-semibold text-slate-700 hover:border-sky-200 hover:bg-sky-50/50 hover:text-[#0284c7] transition cursor-pointer"
               >
                 <MessageSquare className="h-3.5 w-3.5" />
                 <span>Start Engineer Chat</span>
@@ -665,7 +809,7 @@ export function SoftwarePage() {
       {/* Engineer Chat Modal */}
       {chatOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div className="flex w-full max-w-md flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+          <div className="flex w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between bg-[#0d1726] px-5 py-3.5 text-white">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
@@ -687,7 +831,7 @@ export function SoftwarePage() {
                 <div
                   key={i}
                   className={cn(
-                    'max-w-[85%] rounded-lg px-3 py-2 text-xs leading-relaxed',
+                    'max-w-[85%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed',
                     msg.sender === 'engineer'
                       ? 'bg-white border border-slate-200 text-slate-700'
                       : 'ml-auto bg-[#0284c7] text-white',

@@ -11,6 +11,9 @@ import {
   X,
   Calendar,
   Clock,
+  ChevronRight,
+  Sparkles,
+  MapPin,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -126,45 +129,76 @@ export function BookRepairPage() {
 
   return (
     <div className="bg-[#f8fafc]">
-      <div className="mx-auto max-w-7xl px-4 pt-5 pb-16 sm:px-6 lg:px-8">
-        {/* Breadcrumb */}
-        <nav
-          aria-label="Breadcrumb"
-          className="flex flex-wrap items-center gap-2 text-xs text-slate-400"
-        >
-          <Link to="/catalog" className="hover:text-slate-700 transition">
-            Catalog
-          </Link>
-          <span>/</span>
-          <span>Services</span>
-          <span>/</span>
-          <span className="font-semibold text-slate-800">
-            Repair &amp; Technical Booking
-          </span>
-        </nav>
+      {/* Dark-Navy Service Booking Hero Header */}
+      <section className="relative overflow-hidden bg-[#0a1220] border-b border-slate-800/80 py-8 sm:py-10">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-sky-500/15 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, rgba(56, 189, 248, 0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(56, 189, 248, 0.05) 1px, transparent 1px)',
+            backgroundSize: '36px 36px',
+          }}
+          className="pointer-events-none absolute inset-0"
+        />
 
-        {/* Page Title */}
-        <div className="mt-4">
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-[26px]">
-            Repair &amp; Technical Service Booking
-          </h1>
-          <p className="mt-1.5 max-w-xl text-xs leading-relaxed text-slate-500">
-            Expert diagnostics, component upgrades, and professional repairs
-            with transparent pricing and 90-day labor warranty.
-          </p>
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs">
+            <Link to="/" className="text-slate-400 hover:text-sky-400 transition">
+              Home
+            </Link>
+            <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
+            <span className="text-slate-400">Services</span>
+            <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
+            <span className="font-semibold text-sky-400">
+              Repair &amp; Technical Booking
+            </span>
+          </nav>
+
+          <div className="mt-4 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+            <div>
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-400">
+                <Sparkles className="h-3 w-3" />
+                <span>Certified Diagnostics Lab</span>
+              </div>
+              <h1 className="mt-2.5 text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+                Repair &amp; Technical Service Booking
+              </h1>
+              <p className="mt-1.5 max-w-xl text-xs leading-relaxed text-slate-400">
+                Expert diagnostics, component upgrades, and precision repairs
+                with transparent pricing and a 90-day labor warranty.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-slate-300">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-800 bg-[#121e31] px-3 py-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                <span>No Fix, No Fee</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-800 bg-[#121e31] px-3 py-1.5">
+                <MapPin className="h-3.5 w-3.5 text-sky-400" />
+                <span>Piliyandala Service Hub</span>
+              </span>
+            </div>
+          </div>
         </div>
+      </section>
 
+      <div className="mx-auto max-w-7xl px-4 pt-7 pb-16 sm:px-6 lg:px-8">
         {/* Main 2-Column Layout */}
         <form
           onSubmit={handleConfirmBooking}
-          className="mt-7 grid grid-cols-1 items-start gap-6 lg:grid-cols-12"
+          className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12"
         >
           {/* Left Column: 3 Numbered Step Cards */}
           <div className="space-y-5 lg:col-span-8">
             {/* Step 1: Select Device & Service Package */}
-            <section className="rounded-xl border border-slate-200/90 bg-white p-6 shadow-2xs">
+            <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
               <div className="flex items-start gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-[#0284c7]">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#0284c7] to-[#0ea5e9] text-xs font-bold text-white shadow-xs">
                   1
                 </span>
                 <div>
@@ -186,19 +220,21 @@ export function BookRepairPage() {
                   className={cn(
                     'flex flex-col rounded-xl p-4 text-left transition cursor-pointer',
                     deviceType === 'laptop'
-                      ? 'border-2 border-[#0284c7] bg-sky-50/40'
+                      ? 'border-2 border-[#0284c7] bg-sky-50/50 shadow-2xs'
                       : 'border border-slate-200 bg-white hover:border-slate-300',
                   )}
                 >
                   <div className="flex items-center justify-between">
-                    <Laptop
+                    <span
                       className={cn(
-                        'h-5 w-5',
+                        'flex h-9 w-9 items-center justify-center rounded-lg',
                         deviceType === 'laptop'
-                          ? 'text-[#0284c7]'
-                          : 'text-slate-500',
+                          ? 'bg-sky-100 text-[#0284c7]'
+                          : 'bg-slate-100 text-slate-500',
                       )}
-                    />
+                    >
+                      <Laptop className="h-4.5 w-4.5" />
+                    </span>
                     <span
                       className={cn(
                         'flex h-4 w-4 items-center justify-center rounded-full border',
@@ -226,19 +262,21 @@ export function BookRepairPage() {
                   className={cn(
                     'flex flex-col rounded-xl p-4 text-left transition cursor-pointer',
                     deviceType === 'desktop'
-                      ? 'border-2 border-[#0284c7] bg-sky-50/40'
+                      ? 'border-2 border-[#0284c7] bg-sky-50/50 shadow-2xs'
                       : 'border border-slate-200 bg-white hover:border-slate-300',
                   )}
                 >
                   <div className="flex items-center justify-between">
-                    <Monitor
+                    <span
                       className={cn(
-                        'h-5 w-5',
+                        'flex h-9 w-9 items-center justify-center rounded-lg',
                         deviceType === 'desktop'
-                          ? 'text-[#0284c7]'
-                          : 'text-slate-500',
+                          ? 'bg-sky-100 text-[#0284c7]'
+                          : 'bg-slate-100 text-slate-500',
                       )}
-                    />
+                    >
+                      <Monitor className="h-4.5 w-4.5" />
+                    </span>
                     <span
                       className={cn(
                         'flex h-4 w-4 items-center justify-center rounded-full border',
@@ -273,8 +311,8 @@ export function BookRepairPage() {
                       className={cn(
                         'flex w-full items-center justify-between gap-4 rounded-xl px-4 py-3.5 text-left transition cursor-pointer',
                         isSelected
-                          ? 'border-2 border-[#0284c7] bg-sky-50/35'
-                          : 'border border-slate-200 bg-white hover:border-slate-300',
+                          ? 'border-2 border-[#0284c7] bg-sky-50/40 shadow-2xs'
+                          : 'border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/40',
                       )}
                     >
                       <div className="flex items-start gap-3">
@@ -300,7 +338,12 @@ export function BookRepairPage() {
                         </div>
                       </div>
 
-                      <span className="shrink-0 text-xs font-extrabold text-slate-900">
+                      <span
+                        className={cn(
+                          'shrink-0 text-xs font-extrabold',
+                          isSelected ? 'text-[#0284c7]' : 'text-slate-900',
+                        )}
+                      >
                         {pkg.priceDisplay}
                       </span>
                     </button>
@@ -310,9 +353,9 @@ export function BookRepairPage() {
             </section>
 
             {/* Step 2: Device Details & Issue Summary */}
-            <section className="rounded-xl border border-slate-200/90 bg-white p-6 shadow-2xs">
+            <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
               <div className="flex items-start gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-[#0284c7]">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#0284c7] to-[#0ea5e9] text-xs font-bold text-white shadow-xs">
                   2
                 </span>
                 <div>
@@ -340,7 +383,7 @@ export function BookRepairPage() {
                     value={brandModel}
                     onChange={(e) => setBrandModel(e.target.value)}
                     placeholder="e.g. Dell XPS 15, MacBook Pro M2"
-                    className="mt-1.5 w-full rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
                   />
                 </div>
 
@@ -357,7 +400,7 @@ export function BookRepairPage() {
                     value={serialNumber}
                     onChange={(e) => setSerialNumber(e.target.value)}
                     placeholder="e.g. C02G901NMD6R"
-                    className="mt-1.5 w-full rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
                   />
                 </div>
               </div>
@@ -375,15 +418,15 @@ export function BookRepairPage() {
                   value={issueDescription}
                   onChange={(e) => setIssueDescription(e.target.value)}
                   placeholder="Describe symptoms, error codes, unusual sounds, or recent liquid spills..."
-                  className="mt-1.5 w-full rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
                 />
               </div>
             </section>
 
             {/* Step 3: Logistics & Service Schedule */}
-            <section className="rounded-xl border border-slate-200/90 bg-white p-6 shadow-2xs">
+            <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
               <div className="flex items-start gap-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-bold text-[#0284c7]">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[#0284c7] to-[#0ea5e9] text-xs font-bold text-white shadow-xs">
                   3
                 </span>
                 <div>
@@ -398,14 +441,14 @@ export function BookRepairPage() {
               </div>
 
               {/* Segmented Logistics Control */}
-              <div className="mt-5 grid grid-cols-2 rounded-lg bg-slate-100 p-1">
+              <div className="mt-5 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
                 <button
                   type="button"
                   onClick={() => setLogistics('drop-off')}
                   className={cn(
-                    'inline-flex items-center justify-center gap-2 rounded-md py-2 text-xs font-semibold transition cursor-pointer',
+                    'inline-flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-semibold transition cursor-pointer',
                     logistics === 'drop-off'
-                      ? 'bg-white text-slate-900 shadow-2xs'
+                      ? 'bg-white text-slate-900 shadow-xs'
                       : 'text-slate-500 hover:text-slate-800',
                   )}
                 >
@@ -416,9 +459,9 @@ export function BookRepairPage() {
                   type="button"
                   onClick={() => setLogistics('courier')}
                   className={cn(
-                    'inline-flex items-center justify-center gap-2 rounded-md py-2 text-xs font-semibold transition cursor-pointer',
+                    'inline-flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-semibold transition cursor-pointer',
                     logistics === 'courier'
-                      ? 'bg-white text-slate-900 shadow-2xs'
+                      ? 'bg-white text-slate-900 shadow-xs'
                       : 'text-slate-500 hover:text-slate-800',
                   )}
                 >
@@ -441,7 +484,7 @@ export function BookRepairPage() {
                     value={pickupAddress}
                     onChange={(e) => setPickupAddress(e.target.value)}
                     placeholder="Street address, apartment/suite, and postal code"
-                    className="mt-1.5 w-full rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
+                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
                   />
                 </div>
               )}
@@ -459,7 +502,7 @@ export function BookRepairPage() {
                   type="date"
                   value={preferredDate}
                   onChange={(e) => setPreferredDate(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
+                  className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
                 />
               </div>
 
@@ -477,9 +520,9 @@ export function BookRepairPage() {
                         type="button"
                         onClick={() => setSelectedSlot(slot)}
                         className={cn(
-                          'rounded-lg py-2.5 text-center text-[11px] font-semibold transition cursor-pointer',
+                          'rounded-xl py-2.5 text-center text-[11px] font-semibold transition cursor-pointer',
                           isSelected
-                            ? 'border-2 border-[#0284c7] bg-sky-50/50 text-[#0284c7]'
+                            ? 'border-2 border-[#0284c7] bg-sky-50/60 text-[#0284c7] shadow-2xs'
                             : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900',
                         )}
                       >
@@ -494,139 +537,143 @@ export function BookRepairPage() {
 
           {/* Right Column: Sticky Booking Summary */}
           <aside className="lg:col-span-4 lg:sticky lg:top-20">
-            <div className="rounded-xl border border-slate-200/90 bg-white p-6 shadow-sm">
-              {/* Header */}
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-bold text-slate-900">
-                  Booking Summary
-                </h2>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md shadow-slate-200/60">
+              {/* Dark Navy Header */}
+              <div className="flex items-center justify-between bg-[#0d1726] px-6 py-4 text-white">
+                <h2 className="text-sm font-bold">Booking Summary</h2>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                   <span>Verified Center</span>
                 </span>
               </div>
 
-              {/* Line Items */}
-              <div className="mt-5 space-y-3.5 text-xs">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      {selectedService.name}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-slate-400">
-                      {deviceType === 'laptop'
-                        ? 'Laptop Hardware Service'
-                        : 'Desktop Hardware Service'}
-                    </p>
+              <div className="p-6">
+                {/* Line Items */}
+                <div className="space-y-3.5 text-xs">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold text-slate-900">
+                        {selectedService.name}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-400">
+                        {deviceType === 'laptop'
+                          ? 'Laptop Hardware Service'
+                          : 'Desktop Hardware Service'}
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-bold text-slate-900">
+                      ${selectedService.price.toFixed(2)}
+                    </span>
                   </div>
-                  <span className="shrink-0 font-bold text-slate-900">
-                    ${selectedService.price.toFixed(2)}
-                  </span>
-                </div>
 
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      Diagnostic Bench Test
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-slate-400">
-                      Component Stress Check
-                    </p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        Diagnostic Bench Test
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-400">
+                        Component Stress Check
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="font-bold text-slate-900">$0.00</span>{' '}
+                      <span className="text-[10px] font-bold text-emerald-600">
+                        Included
+                      </span>
+                    </div>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <span className="font-bold text-slate-900">$0.00</span>{' '}
-                    <span className="text-[10px] font-semibold text-emerald-600">
-                      Included
+
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        {logistics === 'drop-off'
+                          ? 'In-Store Drop-Off'
+                          : 'Doorstep Courier Pickup'}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-400">
+                        {logistics === 'drop-off'
+                          ? 'Piliyandala Service Hub'
+                          : 'Insured Two-Way Transit'}
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-bold text-slate-900">
+                      {shippingFee === 0 ? 'Free' : `$${shippingFee.toFixed(2)}`}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      {logistics === 'drop-off'
-                        ? 'In-Store Drop-Off'
-                        : 'Doorstep Courier Pickup'}
+                {/* Price Breakdown */}
+                <div className="mt-5 space-y-2 border-t border-slate-100 pt-4 text-xs">
+                  <div className="flex items-center justify-between text-slate-500">
+                    <span>Subtotal</span>
+                    <span className="font-semibold text-slate-700">
+                      ${subtotal.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-500">
+                    <span>Estimated Tax</span>
+                    <span className="font-semibold text-slate-700">
+                      ${estimatedTax.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 text-sm">
+                    <span className="font-bold text-slate-900">
+                      Total Due at Service
+                    </span>
+                    <span className="text-lg font-extrabold text-[#0284c7]">
+                      ${totalDue.toFixed(2)}
+                      {selectedService.plusParts ? '*' : ''}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Turnaround & Warranty Mini Cards */}
+                <div className="mt-5 grid grid-cols-2 gap-2.5">
+                  <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
+                    <p className="text-[10px] font-medium text-slate-400">
+                      Turnaround
                     </p>
-                    <p className="mt-0.5 text-[11px] text-slate-400">
-                      {logistics === 'drop-off'
-                        ? 'Tech Hub Downtown Branch'
-                        : 'Insured Two-Way Transit'}
+                    <p className="mt-0.5 text-[11px] font-bold text-slate-900">
+                      {selectedService.turnaround}
                     </p>
                   </div>
-                  <span className="shrink-0 font-bold text-slate-900">
-                    {shippingFee === 0 ? 'Free' : `$${shippingFee.toFixed(2)}`}
-                  </span>
+                  <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
+                    <p className="text-[10px] font-medium text-slate-400">
+                      Warranty
+                    </p>
+                    <p className="mt-0.5 text-[11px] font-bold text-slate-900">
+                      90-Day Guarantee
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              {/* Price Breakdown */}
-              <div className="mt-5 space-y-2 border-t border-slate-100 pt-4 text-xs">
-                <div className="flex items-center justify-between text-slate-500">
-                  <span>Subtotal</span>
-                  <span className="font-medium text-slate-700">
-                    ${subtotal.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-500">
-                  <span>Estimated Tax</span>
-                  <span className="font-medium text-slate-700">
-                    ${estimatedTax.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between pt-2 text-sm">
-                  <span className="font-bold text-slate-900">
-                    Total Due at Service
-                  </span>
-                  <span className="text-base font-extrabold text-slate-900">
-                    ${totalDue.toFixed(2)}
-                    {selectedService.plusParts ? '*' : ''}
-                  </span>
-                </div>
-              </div>
-
-              {/* Turnaround & Warranty Mini Cards */}
-              <div className="mt-5 grid grid-cols-2 gap-2.5">
-                <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <p className="text-[10px] text-slate-400">Turnaround</p>
-                  <p className="mt-0.5 text-[11px] font-bold text-slate-800">
-                    {selectedService.turnaround}
+                {/* Inline Validation Error */}
+                {formError && (
+                  <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700">
+                    {formError}
                   </p>
+                )}
+
+                {/* Submit CTA */}
+                <button
+                  type="submit"
+                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] py-3 text-xs font-bold text-white shadow-sm shadow-sky-500/20 hover:from-[#0369a1] hover:to-[#0284c7] transition cursor-pointer"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Confirm Service Booking</span>
+                </button>
+
+                {/* Trust Micro-Footer */}
+                <div className="mt-4 flex items-center justify-center gap-5 text-[10px] text-slate-400">
+                  <span className="inline-flex items-center gap-1">
+                    <Lock className="h-3 w-3" />
+                    <span>Secure Booking</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <ShieldCheck className="h-3 w-3" />
+                    <span>No Fix, No Fee</span>
+                  </span>
                 </div>
-                <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <p className="text-[10px] text-slate-400">Warranty</p>
-                  <p className="mt-0.5 text-[11px] font-bold text-slate-800">
-                    90-Day Guarantee
-                  </p>
-                </div>
-              </div>
-
-              {/* Inline Validation Error */}
-              {formError && (
-                <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700">
-                  {formError}
-                </p>
-              )}
-
-              {/* Submit CTA */}
-              <button
-                type="submit"
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#0284c7] py-3 text-xs font-bold text-white shadow-xs hover:bg-[#0369a1] transition cursor-pointer"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                <span>Confirm Service Booking</span>
-              </button>
-
-              {/* Trust Micro-Footer */}
-              <div className="mt-4 flex items-center justify-center gap-5 text-[10px] text-slate-400">
-                <span className="inline-flex items-center gap-1">
-                  <Lock className="h-3 w-3" />
-                  <span>Secure Booking</span>
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <ShieldCheck className="h-3 w-3" />
-                  <span>No Fix, No Fee</span>
-                </span>
               </div>
             </div>
           </aside>
@@ -636,7 +683,7 @@ export function BookRepairPage() {
       {/* Booking Confirmed Modal */}
       {confirmedTicket && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div className="flex items-center gap-2 text-emerald-600">
                 <CheckCircle2 className="h-5 w-5" />
@@ -654,7 +701,7 @@ export function BookRepairPage() {
             </div>
 
             <div className="space-y-4 p-5 text-xs">
-              <div className="rounded-lg border border-sky-200/70 bg-sky-50/60 p-3.5 text-center">
+              <div className="rounded-xl border border-sky-200/70 bg-sky-50/60 p-3.5 text-center">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                   Repair Ticket Reference
                 </p>
@@ -702,7 +749,7 @@ export function BookRepairPage() {
                 <button
                   type="button"
                   onClick={() => setConfirmedTicket(null)}
-                  className="flex-1 rounded-lg bg-[#0284c7] py-2.5 text-xs font-semibold text-white hover:bg-[#0369a1] cursor-pointer"
+                  className="flex-1 rounded-xl bg-[#0284c7] py-2.5 text-xs font-semibold text-white hover:bg-[#0369a1] cursor-pointer"
                 >
                   Done
                 </button>
