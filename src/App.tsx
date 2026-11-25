@@ -7,6 +7,8 @@ import { ProductDetailPage } from '@/pages/customer/ProductDetailPage';
 import { SoftwarePage } from '@/pages/customer/SoftwarePage';
 import { BookRepairPage } from '@/pages/customer/BookRepairPage';
 import { AccountDashboardPage } from '@/pages/customer/AccountDashboardPage';
+import { SupportPage } from '@/pages/customer/SupportPage';
+import { CartPage } from '@/pages/customer/CartPage';
 import { AdminDashboardPage } from '@/pages/admin/AdminDashboardPage';
 
 export default function App() {
@@ -22,6 +24,8 @@ export default function App() {
         <Route path="/book-repair" element={<BookRepairPage />} />
         <Route path="/account" element={<AccountDashboardPage />} />
         <Route path="/repair-status" element={<AccountDashboardPage />} />
+        <Route path="/support" element={<SupportPage />} />
+        <Route path="/cart" element={<CartPage />} />
       </Route>
 
       {/* Admin Dashboard Routes */}

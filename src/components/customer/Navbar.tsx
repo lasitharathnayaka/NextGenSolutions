@@ -99,7 +99,7 @@ export function Navbar() {
               Product Detail
             </Link>
             <NavLink
-              to="/repair-status"
+              to="/support"
               className={({ isActive }) =>
                 cn(
                   'rounded-md px-3 py-1.5 text-xs font-medium transition',
@@ -109,14 +109,8 @@ export function Navbar() {
                 )
               }
             >
-              Repair Status
-            </NavLink>
-            <Link
-              to="/support"
-              className="rounded-md px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-[#162338] hover:text-white transition"
-            >
               Support
-            </Link>
+            </NavLink>
             <NavLink
               to="/admin"
               className={({ isActive }) =>
@@ -231,13 +225,6 @@ export function Navbar() {
               )}
             >
               Product Detail
-            </Link>
-            <Link
-              to="/repair-status"
-              onClick={() => setMobileMenuOpen(false)}
-              className="rounded-md px-3 py-2 text-sm font-medium text-slate-300 hover:bg-[#162338] hover:text-white"
-            >
-              Repair Status
             </Link>
             <Link
               to="/support"

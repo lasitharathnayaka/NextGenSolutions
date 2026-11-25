@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ShoppingBag,
@@ -92,11 +92,60 @@ const FILTER_TABS: { id: DealCategory; label: string }[] = [
   { id: 'components', label: 'Components' },
 ];
 
+const HERO_SLIDES = [
+  {
+    id: 'titan-rig',
+    tag: 'Featured Rig',
+    title: 'NextGen Titan X Pro Workstation',
+    image: '/images/hero-workstation.jpg',
+    bgImage: '/images/hero-bg-workstation.jpg',
+    href: '/product/nextgen-titan-x-pro',
+    glowClass: 'from-sky-500/20 via-cyan-500/10 to-indigo-600/15',
+  },
+  {
+    id: 'cybercraft',
+    tag: 'Instant Suite',
+    title: 'CyberCraft Pro Studio Enterprise',
+    image: '/images/cybercraft-studio.jpg',
+    bgImage: '/images/hero-bg-workspace.jpg',
+    href: '/software',
+    glowClass: 'from-sky-600/20 via-blue-500/10 to-purple-500/15',
+  },
+  {
+    id: 'xps-creator',
+    tag: 'Certified Creator',
+    title: 'Dell XPS 15 9530 Creator Edition',
+    image: '/images/dell-xps-15.jpg',
+    bgImage: '/images/hero-workstation.jpg',
+    href: '/product/dell-xps-15-9530',
+    glowClass: 'from-cyan-500/20 via-sky-500/10 to-emerald-500/15',
+  },
+  {
+    id: 'omen-45l',
+    tag: 'Flagship Tower',
+    title: 'HP Omen 45L Gaming Workstation',
+    image: '/images/hp-omen-45l.jpg',
+    bgImage: '/images/cybercraft-studio.jpg',
+    href: '/product/hp-omen-45l-gaming',
+    glowClass: 'from-indigo-500/20 via-sky-500/10 to-cyan-500/15',
+  },
+];
+
 export function HomePage() {
   const { addToCart } = useCart();
   const [activeTab, setActiveTab] = useState<DealCategory>('all');
   const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
   const [recentlyAdded, setRecentlyAdded] = useState<Record<string, boolean>>({});
+  const [heroSlideIdx, setHeroSlideIdx] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setHeroSlideIdx((prev) => (prev + 1) % HERO_SLIDES.length);
+    }, 4500);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const activeSlide = HERO_SLIDES[heroSlideIdx];
 
   const filteredProducts = FEATURED_DEALS.filter((product) => {
     if (activeTab === 'all') return true;
@@ -123,12 +172,64 @@ export function HomePage() {
 
   return (
     <div>
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-[#0d1726] pt-12 pb-28 sm:pt-16 sm:pb-32">
-        {/* Subtle ambient lighting */}
+      {/* Hero Section with Live Changing Background */}
+      <section className="relative overflow-hidden bg-[#08101d] pt-12 pb-28 sm:pt-16 sm:pb-32">
+        {/* Live Crossfading Full-Bleed Background Images */}
+        {HERO_SLIDES.map((slide, idx) => (
+          <div
+            key={slide.id}
+            aria-hidden="true"
+            className={cn(
+              'pointer-events-none absolute inset-0 transition-all duration-1000 ease-in-out',
+              idx === heroSlideIdx
+                ? 'opacity-65 scale-100'
+                : 'opacity-0 scale-105',
+            )}
+          >
+            <img
+              src={slide.bgImage}
+              alt=""
+              className="h-full w-full object-cover object-center"
+            />
+          </div>
+        ))}
+
+        {/* Dynamic Color-Shifting Gradient Veil + Legibility Scrim */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -right-24 top-10 h-96 w-96 rounded-full bg-sky-500/10 blur-3xl"
+          className={cn(
+            'pointer-events-none absolute inset-0 bg-gradient-to-br transition-all duration-1000',
+            activeSlide.glowClass,
+          )}
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#070e1b]/95 via-[#081222]/75 to-[#070e1b]/35"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#070e1b]/90 via-transparent to-[#070e1b]/60"
+        />
+
+        {/* Animated Drifting Tech Grid */}
+        <div
+          aria-hidden="true"
+          style={{
+            backgroundImage:
+              'linear-gradient(to right, rgba(56, 189, 248, 0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(56, 189, 248, 0.06) 1px, transparent 1px)',
+            backgroundSize: '48px 48px',
+          }}
+          className="pointer-events-none absolute inset-0 animate-grid-drift"
+        />
+
+        {/* Live Floating Aurora Orbs */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -left-24 -top-24 h-96 w-96 rounded-full bg-sky-500/20 blur-3xl animate-aurora-1"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 top-10 h-[420px] w-[420px] rounded-full bg-cyan-400/20 blur-3xl animate-aurora-2"
         />
 
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -203,28 +304,54 @@ export function HomePage() {
 
             {/* Right Featured Rig Showcase Card */}
             <div className="lg:col-span-5">
-              <div className="group relative overflow-hidden rounded-xl border border-slate-700/60 bg-[#09111d] shadow-2xl">
-                <div className="aspect-[16/10] w-full overflow-hidden bg-[#0a1322]">
-                  <img
-                    src="/images/hero-workstation.jpg"
-                    alt="NextGen Titan X Pro Workstation"
-                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                  />
+              <div className="group relative overflow-hidden rounded-xl border border-slate-700/70 bg-[#09111d]/90 shadow-2xl backdrop-blur-md">
+                <div className="relative aspect-[16/10] w-full overflow-hidden bg-[#0a1322]">
+                  {HERO_SLIDES.map((slide, idx) => (
+                    <img
+                      key={slide.id}
+                      src={slide.image}
+                      alt={slide.title}
+                      className={cn(
+                        'absolute inset-0 h-full w-full object-cover transition-all duration-700 group-hover:scale-105',
+                        idx === heroSlideIdx
+                          ? 'opacity-100 scale-100'
+                          : 'opacity-0 scale-105 pointer-events-none',
+                      )}
+                    />
+                  ))}
+
+                  {/* Live Indicator Dots */}
+                  <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-slate-950/60 px-2.5 py-1 backdrop-blur-xs">
+                    {HERO_SLIDES.map((slide, idx) => (
+                      <button
+                        key={slide.id}
+                        type="button"
+                        onClick={() => setHeroSlideIdx(idx)}
+                        aria-label={`Show ${slide.title}`}
+                        className={cn(
+                          'h-1.5 rounded-full transition-all cursor-pointer',
+                          idx === heroSlideIdx
+                            ? 'w-4 bg-sky-400'
+                            : 'w-1.5 bg-slate-400/60 hover:bg-white',
+                        )}
+                      />
+                    ))}
+                  </div>
                 </div>
 
                 {/* Bottom Overlay Bar */}
                 <div className="flex items-center justify-between border-t border-slate-700/60 bg-[#0d1726]/95 px-5 py-3.5 backdrop-blur-md">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-wider text-sky-400">
-                      Featured Rig
+                      {activeSlide.tag}
                     </p>
                     <p className="mt-0.5 text-sm font-bold text-white">
-                      NextGen Titan X Pro Workstation
+                      {activeSlide.title}
                     </p>
                   </div>
                   <Link
-                    to="/product/nextgen-titan-x-pro"
-                    aria-label="View NextGen Titan X Pro Workstation"
+                    to={activeSlide.href}
+                    aria-label={`View ${activeSlide.title}`}
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#1a2942] text-slate-200 hover:bg-[#0284c7] hover:text-white transition"
                   >
                     <ArrowRight className="h-4 w-4" />
