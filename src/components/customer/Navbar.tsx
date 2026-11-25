@@ -117,6 +117,19 @@ export function Navbar() {
             >
               Support
             </Link>
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                cn(
+                  'rounded-md px-3 py-1.5 text-xs font-medium transition',
+                  isActive
+                    ? 'bg-[#1a2942] text-white'
+                    : 'text-slate-300 hover:bg-[#162338] hover:text-white',
+                )
+              }
+            >
+              Admin / Staff Management
+            </NavLink>
           </nav>
 
           <Link
@@ -233,6 +246,20 @@ export function Navbar() {
             >
               Support
             </Link>
+            <NavLink
+              to="/admin"
+              onClick={() => setMobileMenuOpen(false)}
+              className={({ isActive }) =>
+                cn(
+                  'rounded-md px-3 py-2 text-sm font-medium transition',
+                  isActive
+                    ? 'bg-[#1a2942] text-white'
+                    : 'text-slate-300 hover:bg-[#162338] hover:text-white',
+                )
+              }
+            >
+              Admin / Staff Management
+            </NavLink>
             <Link
               to="/book-repair"
               onClick={() => setMobileMenuOpen(false)}
