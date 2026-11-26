@@ -27,7 +27,7 @@ export const FEATURED_DEALS: FeaturedDealProduct[] = [
       '2TB Gen5 NVMe + RTX 4090',
     ],
     warranty: '3-Year Global Warranty',
-    price: 2499,
+    price: 749000,
   },
   {
     id: 'apex-ultrabook-15-6',
@@ -42,7 +42,7 @@ export const FEATURED_DEALS: FeaturedDealProduct[] = [
       '1TB High-Speed SSD',
     ],
     warranty: '1-Year Certified Warranty',
-    price: 1149,
+    price: 345000,
   },
   {
     id: 'quantum-nvme-2tb-gen4',
@@ -57,7 +57,7 @@ export const FEATURED_DEALS: FeaturedDealProduct[] = [
       'DRAM Cache Included',
     ],
     warranty: '5-Year Global Warranty',
-    price: 189,
+    price: 56500,
   },
   {
     id: 'cybercraft-pro-studio',
@@ -72,7 +72,7 @@ export const FEATURED_DEALS: FeaturedDealProduct[] = [
       '24/7 Dedicated Support',
     ],
     warranty: 'Official License Key',
-    price: 299,
+    price: 89500,
     priceSuffix: '/yr',
   },
 ];

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   LayoutGrid,
@@ -21,6 +21,21 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  subscribeUserOrders,
+  type DbOrderRecord,
+} from '@/services/ordersService';
+import {
+  approveRepairEstimate,
+  subscribeUserRepairs,
+  type DbRepairBooking,
+} from '@/services/repairsService';
+import {
+  subscribeUserSupportTickets,
+  type DbSupportTicket,
+} from '@/services/supportService';
+import { downloadOrderInvoicePdf } from '@/lib/invoicePdf';
 
 type AccountTab =
   | 'overview'
@@ -67,61 +82,63 @@ const SOFTWARE_KEYS: SoftwareKeyRow[] = [
   },
 ];
 
-const HARDWARE_ORDERS = [
-  {
-    id: 'NGS-8842',
-    badge: 'Used - Grade A',
-    badgeTone: 'amber' as const,
-    product: 'Dell XPS 15 Creator Edition (32GB RAM, 1TB NVMe)',
-    statusLabel: 'Shipped - Tracking via FedEx',
-    statusTone: 'sky' as const,
-    deliveryText: 'Est. Delivery: Tomorrow, 2:00 PM',
-    icon: 'laptop' as const,
-  },
-  {
-    id: 'NGS-8710',
-    badge: 'Brand New',
-    badgeTone: 'emerald' as const,
-    product: 'Samsung 990 PRO 2TB PCIe 4.0 NVMe M.2 SSD',
-    statusLabel: 'Delivered',
-    statusTone: 'emerald' as const,
-    deliveryText: 'Delivered on Oct 02',
-    icon: 'component' as const,
-  },
-];
-
-const REPAIR_STEPS = [
-  {
-    number: 1,
-    title: 'Received',
-    subtitle: 'Oct 12, 09:30 AM',
-    state: 'completed' as const,
-  },
-  {
-    number: 2,
-    title: 'Diagnosing',
-    subtitle: 'Oct 12, 02:15 PM',
-    state: 'completed' as const,
-  },
-  {
-    number: 3,
-    title: 'In Repair',
-    subtitle: 'Active Stress Test',
-    state: 'active' as const,
-  },
-  {
-    number: 4,
-    title: 'Ready for Pickup',
-    subtitle: 'Pending completion',
-    state: 'pending' as const,
-  },
-];
+const REPAIR_STAGE_LIST = [
+  'Received',
+  'Diagnosing',
+  'In Repair',
+  'Ready for Pickup',
+] as const;
 
 export function AccountDashboardPage() {
-  const [activeTab, setActiveTab] = useState<AccountTab>('repairs');
-  const [estimateApproved, setEstimateApproved] = useState(false);
+  const { user, profile } = useAuth();
+  const [activeTab, setActiveTab] = useState<AccountTab>('orders');
+  const [liveOrders, setLiveOrders] = useState<DbOrderRecord[]>([]);
+  const [liveRepairs, setLiveRepairs] = useState<DbRepairBooking[]>([]);
+  const [liveSupportTickets, setLiveSupportTickets] = useState<DbSupportTicket[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setLiveOrders([]);
+      setLiveRepairs([]);
+      setLiveSupportTickets([]);
+      setOrdersLoading(false);
+      return;
+    }
+
+    setOrdersLoading(true);
+    const unsubOrders = subscribeUserOrders(user.uid, (rows) => {
+      setLiveOrders(rows);
+      setOrdersLoading(false);
+    });
+    const unsubRepairs = subscribeUserRepairs(user.uid, (rows) => {
+      setLiveRepairs(rows);
+    });
+    const unsubSupport = subscribeUserSupportTickets(user.uid, (rows) => {
+      setLiveSupportTickets(rows);
+    });
+
+    return () => {
+      unsubOrders();
+      unsubRepairs();
+      unsubSupport();
+    };
+  }, [user?.uid]);
+
+  const displayName = profile?.full_name || user?.displayName || 'Customer';
+  const displayEnterpriseId = profile?.enterprise_id || 'NGS-77210';
+  const displayInitials = displayName
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? '')
+    .join('');
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
   const [downloadedOrderId, setDownloadedOrderId] = useState<string | null>(null);
+
+  const handleApproveEstimate = async (repair: DbRepairBooking) => {
+    if (repair.estimate_approved) return;
+    await approveRepairEstimate(repair.ticket_number);
+  };
 
   const handleCopyKey = async (row: SoftwareKeyRow) => {
     try {
@@ -133,8 +150,9 @@ export function AccountDashboardPage() {
     window.setTimeout(() => setCopiedKeyId(null), 1800);
   };
 
-  const handleDownloadInvoice = (orderId: string) => {
-    setDownloadedOrderId(orderId);
+  const handleDownloadInvoice = (order: DbOrderRecord) => {
+    downloadOrderInvoicePdf(order);
+    setDownloadedOrderId(order.id);
     window.setTimeout(() => setDownloadedOrderId(null), 1800);
   };
 
@@ -152,7 +170,7 @@ export function AccountDashboardPage() {
       id: 'orders',
       label: 'Hardware Orders',
       icon: ShoppingBag,
-      badge: HARDWARE_ORDERS.length,
+      badge: liveOrders.length,
     },
     {
       id: 'keys',
@@ -160,7 +178,12 @@ export function AccountDashboardPage() {
       icon: KeyRound,
       badge: SOFTWARE_KEYS.length,
     },
-    { id: 'repairs', label: 'Active Repairs', icon: Wrench, badge: 1 },
+    {
+      id: 'repairs',
+      label: 'Active Repairs',
+      icon: Wrench,
+      badge: liveRepairs.length,
+    },
     { id: 'addresses', label: 'Saved Addresses', icon: MapPin },
   ];
 
@@ -195,7 +218,7 @@ export function AccountDashboardPage() {
           {/* Left Profile Identity */}
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0284c7] to-[#0ea5e9] text-lg font-extrabold text-white shadow-lg shadow-sky-500/20">
-              AM
+              {displayInitials || 'NG'}
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2.5">
@@ -204,12 +227,34 @@ export function AccountDashboardPage() {
                 </h1>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-400">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  <span>Verified Enterprise Account</span>
+                  <span>
+                    {profile?.role === 'admin'
+                      ? 'Verified Admin Account'
+                      : 'Verified Enterprise Account'}
+                  </span>
                 </span>
               </div>
               <p className="mt-1 text-xs text-slate-400">
-                Welcome back, <span className="font-semibold text-slate-200">Alex Miller</span> — Enterprise ID{' '}
-                <span className="font-mono text-sky-400">#NGS-77210</span>
+                Welcome back,{' '}
+                <span className="font-semibold text-slate-200">
+                  {displayName}
+                </span>{' '}
+                — Enterprise ID{' '}
+                <span className="font-mono text-sky-400">
+                  #{displayEnterpriseId}
+                </span>
+                {!user && (
+                  <>
+                    {' '}
+                    ·{' '}
+                    <Link
+                      to="/login"
+                      className="font-semibold text-sky-400 underline hover:text-sky-300"
+                    >
+                      Sign in
+                    </Link>
+                  </>
+                )}
               </p>
             </div>
           </div>
@@ -219,7 +264,9 @@ export function AccountDashboardPage() {
             <div className="flex items-center gap-3 rounded-xl border border-slate-800 bg-[#111c30]/90 px-4 py-2.5 text-xs">
               <div>
                 <p className="text-[10px] text-slate-400">Active Repairs</p>
-                <p className="font-extrabold text-white">1 Ticket</p>
+                <p className="font-extrabold text-white">
+                  {liveRepairs.length} Ticket{liveRepairs.length !== 1 ? 's' : ''}
+                </p>
               </div>
               <span className="h-6 w-px bg-slate-800" />
               <div>
@@ -232,7 +279,7 @@ export function AccountDashboardPage() {
               <div>
                 <p className="text-[10px] text-slate-400">Orders</p>
                 <p className="font-extrabold text-white">
-                  {HARDWARE_ORDERS.length} Units
+                  {liveOrders.length} Order{liveOrders.length !== 1 ? 's' : ''}
                 </p>
               </div>
             </div>
@@ -347,123 +394,220 @@ export function AccountDashboardPage() {
 
           {/* Right Main Dashboard Content */}
           <div className="space-y-5 lg:col-span-9">
-            {/* Active Repair Tracker Card */}
+            {/* Active Repair Tracker Cards */}
             {showUnifiedDashboard && (
-              <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md bg-sky-50 border border-sky-200/70 px-2.5 py-0.5 font-mono text-[10px] font-bold text-[#0284c7]">
-                        Ticket #NGS-4092
+              <div className="space-y-4">
+                {liveRepairs.length > 0 ? (
+                  (activeTab === 'overview'
+                    ? liveRepairs.slice(0, 1)
+                    : liveRepairs
+                  ).map((repair) => {
+                    const normalizedStage =
+                      repair.stage === 'Completed'
+                        ? 'Ready for Pickup'
+                        : repair.stage;
+                    const currentIdx = Math.max(
+                      0,
+                      REPAIR_STAGE_LIST.indexOf(normalizedStage),
+                    );
+                    const progressWidth =
+                      currentIdx === 0
+                        ? 'w-0'
+                        : currentIdx === 1
+                          ? 'w-1/3'
+                          : currentIdx === 2
+                            ? 'w-2/3'
+                            : 'w-full';
+
+                    return (
+                      <section
+                        key={repair.id}
+                        className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm"
+                      >
+                        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-md bg-sky-50 border border-sky-200/70 px-2.5 py-0.5 font-mono text-[10px] font-bold text-[#0284c7]">
+                                Ticket #{repair.ticket_number}
+                              </span>
+                              <span
+                                className={cn(
+                                  'inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-[10px] font-semibold',
+                                  normalizedStage === 'Ready for Pickup'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-indigo-50 text-indigo-600',
+                                )}
+                              >
+                                <Sparkles className="h-3 w-3" />
+                                <span>{normalizedStage}</span>
+                              </span>
+                            </div>
+                            <h2 className="mt-2.5 text-base font-bold text-slate-900">
+                              {repair.brand_model} — {repair.service_package}
+                            </h2>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleApproveEstimate(repair)}
+                            className={cn(
+                              'inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold text-white shadow-xs transition cursor-pointer',
+                              repair.estimate_approved
+                                ? 'bg-emerald-600'
+                                : 'bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] shadow-sky-500/20 hover:from-[#0369a1] hover:to-[#0284c7]',
+                            )}
+                          >
+                            {repair.estimate_approved ? (
+                              <>
+                                <CheckCircle2 className="h-4 w-4" />
+                                <span>
+                                  Estimate Approved (Rs.{' '}
+                                  {Number(repair.total_due).toLocaleString('en-US', {
+                                    minimumFractionDigits: 2,
+                                  })}
+                                  )
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <CreditCard className="h-4 w-4" />
+                                <span>
+                                  Approve Estimate / Invoice (Rs.{' '}
+                                  {Number(repair.total_due).toLocaleString('en-US', {
+                                    minimumFractionDigits: 2,
+                                  })}
+                                  )
+                                </span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Connected 4-Step Progress Tracker */}
+                        <div className="relative mt-7">
+                          <div
+                            aria-hidden="true"
+                            className="hidden sm:block absolute left-4 right-4 top-4 h-0.5 bg-slate-100"
+                          >
+                            <div
+                              className={cn(
+                                'h-full bg-gradient-to-r from-emerald-500 to-[#0284c7] rounded-full transition-all duration-500',
+                                progressWidth,
+                              )}
+                            />
+                          </div>
+
+                          <div className="relative grid grid-cols-2 gap-4 sm:grid-cols-4">
+                            {REPAIR_STAGE_LIST.map((stageTitle, idx) => {
+                              const isFinalReady =
+                                normalizedStage === 'Ready for Pickup' && idx === 3;
+                              const state =
+                                idx < currentIdx || isFinalReady
+                                  ? 'completed'
+                                  : idx === currentIdx
+                                    ? 'active'
+                                    : 'pending';
+                              return (
+                                <div
+                                  key={stageTitle}
+                                  className="flex flex-col items-start"
+                                >
+                                  <span
+                                    className={cn(
+                                      'flex h-8 w-8 items-center justify-center rounded-xl text-xs font-bold shadow-xs',
+                                      state === 'completed' &&
+                                        'bg-emerald-500 text-white',
+                                      state === 'active' &&
+                                        'bg-[#0284c7] text-white ring-4 ring-sky-100',
+                                      state === 'pending' &&
+                                        'border border-slate-200 bg-white text-slate-400',
+                                    )}
+                                  >
+                                    {state === 'completed' ? (
+                                      <Check className="h-4 w-4" />
+                                    ) : (
+                                      idx + 1
+                                    )}
+                                  </span>
+                                  <p
+                                    className={cn(
+                                      'mt-3 text-xs font-bold',
+                                      state === 'active'
+                                        ? 'text-[#0284c7]'
+                                        : state === 'pending'
+                                          ? 'text-slate-400'
+                                          : 'text-slate-900',
+                                    )}
+                                  >
+                                    {stageTitle}
+                                  </p>
+                                  <p
+                                    className={cn(
+                                      'mt-0.5 text-[11px]',
+                                      state === 'active'
+                                        ? 'font-semibold text-[#0284c7]'
+                                        : isFinalReady
+                                          ? 'font-semibold text-emerald-600'
+                                          : 'text-slate-400',
+                                    )}
+                                  >
+                                    {isFinalReady
+                                      ? 'Ready for Pickup!'
+                                      : state === 'completed'
+                                        ? 'Completed'
+                                        : state === 'active'
+                                          ? 'In Progress'
+                                          : 'Pending'}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Technician Notes Box */}
+                        <div className="mt-6 flex items-start gap-3 rounded-xl border border-slate-200/80 bg-slate-50/80 p-4">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 border border-sky-100 text-[#0284c7]">
+                            <UserCog className="h-4 w-4" />
+                          </span>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">
+                              Technician Notes (Lead Engineer:{' '}
+                              {repair.lead_engineer || 'Marcus Vance'})
+                            </p>
+                            <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+                              {repair.technician_notes ||
+                                'Device received at Piliyandala Service Hub. Diagnostic check in progress.'}
+                            </p>
+                          </div>
+                        </div>
+                      </section>
+                    );
+                  })
+                ) : (
+                  <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
+                    <div className="py-8 text-center">
+                      <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-sky-50 text-[#0284c7]">
+                        <Wrench className="h-5 w-5" />
                       </span>
-                      <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2.5 py-0.5 text-[10px] font-semibold text-indigo-600">
-                        <Sparkles className="h-3 w-3" />
-                        <span>Priority Diagnostics</span>
-                      </span>
+                      <h2 className="mt-3 text-sm font-bold text-slate-900">
+                        No active repair tickets yet
+                      </h2>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Book a hardware diagnostic, thermal repaste, or SSD/RAM
+                        upgrade to track live progress here.
+                      </p>
+                      <Link
+                        to="/book-repair"
+                        className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#0284c7] px-4 py-2 text-xs font-bold text-white hover:bg-[#0369a1] transition"
+                      >
+                        <span>Book a Repair</span>
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
                     </div>
-                    <h2 className="mt-2.5 text-base font-bold text-slate-900">
-                      Dell XPS 15 — Thermal Repaste &amp; SSD Upgrade
-                    </h2>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setEstimateApproved(true)}
-                    className={cn(
-                      'inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold text-white shadow-xs transition cursor-pointer',
-                      estimateApproved
-                        ? 'bg-emerald-600'
-                        : 'bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] shadow-sky-500/20 hover:from-[#0369a1] hover:to-[#0284c7]',
-                    )}
-                  >
-                    {estimateApproved ? (
-                      <>
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span>Estimate Approved ($45.00)</span>
-                      </>
-                    ) : (
-                      <>
-                        <CreditCard className="h-4 w-4" />
-                        <span>Approve Estimate / Invoice ($45.00)</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Connected 4-Step Progress Tracker */}
-                <div className="relative mt-7">
-                  {/* Connector Track Line (Desktop) */}
-                  <div
-                    aria-hidden="true"
-                    className="hidden sm:block absolute left-4 right-4 top-4 h-0.5 bg-slate-100"
-                  >
-                    <div className="h-full w-2/3 bg-gradient-to-r from-emerald-500 to-[#0284c7] rounded-full" />
-                  </div>
-
-                  <div className="relative grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    {REPAIR_STEPS.map((step) => (
-                      <div key={step.number} className="flex flex-col items-start">
-                        <span
-                          className={cn(
-                            'flex h-8 w-8 items-center justify-center rounded-xl text-xs font-bold shadow-xs',
-                            step.state === 'completed' &&
-                              'bg-emerald-500 text-white',
-                            step.state === 'active' &&
-                              'bg-[#0284c7] text-white ring-4 ring-sky-100',
-                            step.state === 'pending' &&
-                              'border border-slate-200 bg-white text-slate-400',
-                          )}
-                        >
-                          {step.state === 'completed' ? (
-                            <Check className="h-4 w-4" />
-                          ) : (
-                            step.number
-                          )}
-                        </span>
-                        <p
-                          className={cn(
-                            'mt-3 text-xs font-bold',
-                            step.state === 'active'
-                              ? 'text-[#0284c7]'
-                              : step.state === 'pending'
-                                ? 'text-slate-400'
-                                : 'text-slate-900',
-                          )}
-                        >
-                          {step.title}
-                        </p>
-                        <p
-                          className={cn(
-                            'mt-0.5 text-[11px]',
-                            step.state === 'active'
-                              ? 'font-semibold text-[#0284c7]'
-                              : 'text-slate-400',
-                          )}
-                        >
-                          {step.subtitle}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Technician Notes Box */}
-                <div className="mt-6 flex items-start gap-3 rounded-xl border border-slate-200/80 bg-slate-50/80 p-4">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 border border-sky-100 text-[#0284c7]">
-                    <UserCog className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-xs font-bold text-slate-900">
-                      Technician Notes (Lead Engineer: Marcus Vance)
-                    </p>
-                    <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-                      Thermal paste replacement completed successfully.
-                      Currently running 24-hour stress test and SSD sector
-                      verification.
-                    </p>
-                  </div>
-                </div>
-              </section>
+                  </section>
+                )}
+              </div>
             )}
 
             {/* Purchased Software Keys Table */}
@@ -557,81 +701,129 @@ export function AccountDashboardPage() {
                 </div>
 
                 <div className="space-y-3">
-                  {HARDWARE_ORDERS.map((order) => {
-                    const isDownloaded = downloadedOrderId === order.id;
-                    return (
-                      <div
-                        key={order.id}
-                        className="flex flex-col justify-between gap-4 rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 hover:border-sky-200 hover:bg-white transition sm:flex-row sm:items-center"
+                  {ordersLoading ? (
+                    <p className="py-6 text-center text-xs text-slate-400">
+                      Loading your orders...
+                    </p>
+                  ) : liveOrders.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 py-10 px-4 text-center">
+                      <ShoppingBag className="mx-auto h-7 w-7 text-slate-400" />
+                      <p className="mt-2.5 text-xs font-bold text-slate-800">
+                        No hardware orders yet
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Orders you place from your cart will appear here with
+                        live status updates from our team.
+                      </p>
+                      <Link
+                        to="/catalog"
+                        className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#0284c7] px-4 py-2 text-xs font-bold text-white hover:bg-[#0369a1] transition"
                       >
-                        <div className="flex items-start gap-3.5">
-                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white border border-slate-200/80 text-[#0284c7] shadow-2xs">
-                            {order.icon === 'laptop' ? (
-                              <Laptop className="h-5 w-5" />
-                            ) : (
-                              <Cpu className="h-5 w-5" />
-                            )}
-                          </span>
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-mono text-xs font-bold text-slate-900">
-                                Order #{order.id}
+                        <span>Browse Hardware Catalog</span>
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
+                  ) : (
+                    liveOrders.map((order) => {
+                      const isDownloaded = downloadedOrderId === order.id;
+                      const itemSummary =
+                        order.order_items
+                          ?.map((i) => `${i.item_name} × ${i.quantity}`)
+                          .join(', ') || 'Hardware Order';
+                      const isLaptopOrder = Boolean(
+                        itemSummary
+                          .toLowerCase()
+                          .match(/laptop|xps|thinkpad|latitude|ultrabook|rog|book/),
+                      );
+
+                      return (
+                        <div
+                          key={order.id}
+                          className="flex flex-col justify-between gap-4 rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 hover:border-sky-200 hover:bg-white transition sm:flex-row sm:items-center"
+                        >
+                          <div className="flex items-start gap-3.5">
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white border border-slate-200/80 text-[#0284c7] shadow-2xs">
+                              {isLaptopOrder ? (
+                                <Laptop className="h-5 w-5" />
+                              ) : (
+                                <Cpu className="h-5 w-5" />
+                              )}
+                            </span>
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-mono text-xs font-bold text-slate-900">
+                                  Order #{order.order_number}
+                                </p>
+                                <span
+                                  className={cn(
+                                    'rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                                    order.payment_status === 'Paid'
+                                      ? 'bg-emerald-50 text-emerald-700'
+                                      : 'bg-amber-50 text-amber-700',
+                                  )}
+                                >
+                                  {order.payment_status}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-xs font-medium text-slate-600">
+                                {itemSummary}
                               </p>
+                              <p className="mt-1 text-xs font-extrabold text-slate-900">
+                                Rs.{' '}
+                                {Number(order.total).toLocaleString('en-US', {
+                                  minimumFractionDigits: 2,
+                                })}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
+                            <div className="text-left sm:text-right">
                               <span
                                 className={cn(
-                                  'rounded-full px-2 py-0.5 text-[10px] font-semibold',
-                                  order.badgeTone === 'amber'
-                                    ? 'bg-amber-50 text-amber-700'
-                                    : 'bg-emerald-50 text-emerald-700',
+                                  'inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold',
+                                  order.fulfillment_status === 'Delivered'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : order.fulfillment_status === 'Shipped (FedEx)'
+                                      ? 'bg-sky-50 text-[#0284c7]'
+                                      : order.fulfillment_status === 'Cancelled'
+                                        ? 'bg-rose-50 text-rose-700'
+                                        : 'bg-amber-50 text-amber-700',
                                 )}
                               >
-                                {order.badge}
+                                {order.fulfillment_status}
                               </span>
+                              <p className="mt-1 text-[11px] text-slate-400">
+                                {order.fulfillment_status === 'Delivered'
+                                  ? 'Order completed & delivered'
+                                  : order.fulfillment_status === 'Shipped (FedEx)'
+                                    ? 'Dispatched via express courier'
+                                    : 'Live status synced with admin'}
+                              </p>
                             </div>
-                            <p className="mt-1 text-xs font-medium text-slate-600">
-                              {order.product}
-                            </p>
-                          </div>
-                        </div>
 
-                        <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
-                          <div className="text-left sm:text-right">
-                            <span
-                              className={cn(
-                                'inline-block rounded-full px-2.5 py-0.5 text-[10px] font-bold',
-                                order.statusTone === 'sky'
-                                  ? 'bg-sky-50 text-[#0284c7]'
-                                  : 'bg-emerald-50 text-emerald-700',
-                              )}
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadInvoice(order)}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:border-sky-300 hover:text-[#0284c7] transition cursor-pointer"
                             >
-                              {order.statusLabel}
-                            </span>
-                            <p className="mt-1 text-[11px] text-slate-400">
-                              {order.deliveryText}
-                            </p>
+                              {isDownloaded ? (
+                                <>
+                                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                  <span>Saved</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="h-3.5 w-3.5" />
+                                  <span>Invoice PDF</span>
+                                </>
+                              )}
+                            </button>
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadInvoice(order.id)}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:border-sky-300 hover:text-[#0284c7] transition cursor-pointer"
-                          >
-                            {isDownloaded ? (
-                              <>
-                                <Check className="h-3.5 w-3.5 text-emerald-600" />
-                                <span>Saved</span>
-                              </>
-                            ) : (
-                              <>
-                                <Download className="h-3.5 w-3.5" />
-                                <span>Invoice PDF</span>
-                              </>
-                            )}
-                          </button>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               </section>
             )}
@@ -681,25 +873,70 @@ export function AccountDashboardPage() {
             {/* Support Tickets Sub-View */}
             {activeTab === 'tickets' && (
               <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
-                <h2 className="text-sm font-bold text-slate-900">
-                  Support Tickets
-                </h2>
-                <p className="mt-1 text-xs text-slate-500">
-                  All active technical support and warranty conversations.
-                </p>
-                <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-xs font-bold text-slate-900">
-                      #SUP-2041 — Thunderbolt 4 Dock Firmware Assistance
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">
-                      Last reply by Engineer Marcus Vance · 4 hours ago
+                    <h2 className="text-sm font-bold text-slate-900">
+                      Support Tickets ({liveSupportTickets.length})
+                    </h2>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      All active technical support and warranty conversations.
                     </p>
                   </div>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
-                    Open
-                  </span>
+                  <Link
+                    to="/support"
+                    className="inline-flex items-center gap-1 rounded-xl bg-[#0284c7] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0369a1] transition"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>New Ticket</span>
+                  </Link>
                 </div>
+
+                {liveSupportTickets.length === 0 ? (
+                  <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 py-8 px-4 text-center">
+                    <Headphones className="mx-auto h-6 w-6 text-slate-400" />
+                    <p className="mt-2 text-xs font-bold text-slate-800">
+                      No support tickets yet
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Need help with an order, warranty, or software activation? Submit a ticket on our Support page.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    {liveSupportTickets.map((ticket) => (
+                      <div
+                        key={ticket.id}
+                        className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:flex-row sm:items-center"
+                      >
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">
+                            #{ticket.ticket_number} — {ticket.topic}
+                          </p>
+                          <p className="mt-1 text-[11px] text-slate-600 line-clamp-2">
+                            {ticket.message}
+                          </p>
+                          {ticket.reference_id && (
+                            <p className="mt-1 font-mono text-[10px] text-slate-400">
+                              Ref: {ticket.reference_id}
+                            </p>
+                          )}
+                        </div>
+                        <span
+                          className={cn(
+                            'self-start sm:self-center shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold',
+                            ticket.status === 'Resolved'
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : ticket.status === 'In Progress'
+                                ? 'bg-sky-50 text-[#0284c7]'
+                                : 'bg-amber-50 text-amber-700',
+                          )}
+                        >
+                          {ticket.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </section>
             )}
 

@@ -6,28 +6,86 @@ import {
   Minus,
   Plus,
   Trash2,
-  ArrowRight,
   ShieldCheck,
   Truck,
-  Lock,
   CheckCircle2,
   Sparkles,
+  MessageCircle,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { placeOrder } from '@/services/ordersService';
 
 const TAX_RATE = 0.08;
-const FREE_SHIPPING_THRESHOLD = 500;
-const FLAT_SHIPPING = 15;
+const FREE_SHIPPING_THRESHOLD = 150000;
+const FLAT_SHIPPING = 1500;
+
+// Admin WhatsApp number (international format, digits only, e.g. 94760336703)
+const ADMIN_WHATSAPP_NUMBER = (
+  (import.meta.env.VITE_ADMIN_WHATSAPP as string | undefined) || '94760336703'
+).replace(/\D/g, '');
+
+function buildWhatsAppOrderUrl(params: {
+  orderNumber: string;
+  customerName: string;
+  customerEmail: string;
+  shippingAddress: string;
+  items: { name: string; quantity: number; unitPrice: number }[];
+  subtotal: number;
+  shipping: number;
+  tax: number;
+  total: number;
+}) {
+  const itemLines = params.items
+    .map(
+      (item, idx) =>
+        `${idx + 1}. ${item.name} × ${item.quantity} — Rs. ${(
+          item.unitPrice * item.quantity
+        ).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+    )
+    .join('\n');
+
+  const shippingText =
+    params.shipping === 0 ? 'Free' : `Rs. ${params.shipping.toFixed(2)}`;
+
+  const message = [
+    `*New Order — NextGenSolutions*`,
+    `Order Ref: *#${params.orderNumber}*`,
+    ``,
+    `*Customer Details:*`,
+    `• Name: ${params.customerName}`,
+    `• Email: ${params.customerEmail}`,
+    `• Delivery Address: ${params.shippingAddress}`,
+    ``,
+    `*Order Items:*`,
+    itemLines,
+    ``,
+    `*Order Summary:*`,
+    `• Subtotal: Rs. ${params.subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+    `• Express Dispatch: ${shippingText}`,
+    `• Estimated Tax (8%): Rs. ${params.tax.toFixed(2)}`,
+    `• *Total: Rs. ${params.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}*`,
+    ``,
+    `Please confirm my order and share payment/delivery details. Thank you!`,
+  ].join('\n');
+
+  return `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+}
 
 export function CartPage() {
+  const { user } = useAuth();
   const { items, totalItems, updateQuantity, removeFromCart, clearCart } =
     useCart();
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [shippingAddress, setShippingAddress] = useState('');
-  const [orderConfirmation, setOrderConfirmation] = useState<string | null>(
-    null,
-  );
+  const [submitting, setSubmitting] = useState(false);
+  const [orderConfirmation, setOrderConfirmation] = useState<{
+    orderNumber: string;
+    whatsappUrl: string;
+  } | null>(null);
 
   const subtotal = items.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -38,12 +96,50 @@ export function CartPage() {
   const tax = Number((subtotal * TAX_RATE).toFixed(2));
   const total = subtotal + shipping + tax;
 
-  const handlePlaceOrder = (e: FormEvent) => {
+  const handlePlaceOrder = async (e: FormEvent) => {
     e.preventDefault();
-    if (items.length === 0) return;
+    if (items.length === 0 || submitting) return;
+    setSubmitting(true);
+
     const code = Math.floor(1000 + Math.random() * 9000);
-    setOrderConfirmation(`NGS-ORD-${code}`);
+    const orderNum = `NGS-ORD-${code}`;
+    const orderItems = items.map((i) => ({
+      name: i.name,
+      quantity: i.quantity,
+      unitPrice: i.price,
+    }));
+
+    const whatsappUrl = buildWhatsAppOrderUrl({
+      orderNumber: orderNum,
+      customerName: customerName.trim(),
+      customerEmail: customerEmail.trim(),
+      shippingAddress: shippingAddress.trim(),
+      items: orderItems,
+      subtotal,
+      shipping,
+      tax,
+      total,
+    });
+
+    await placeOrder({
+      orderNumber: orderNum,
+      userId: user?.uid ?? null,
+      customerName: customerName.trim(),
+      customerEmail: customerEmail.trim(),
+      shippingAddress: shippingAddress.trim(),
+      subtotal,
+      shippingFee: shipping,
+      tax,
+      total,
+      items: orderItems,
+    });
+
+    setSubmitting(false);
+    setOrderConfirmation({ orderNumber: orderNum, whatsappUrl });
     clearCart();
+
+    // Redirect customer to Admin WhatsApp with pre-filled order summary
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -79,8 +175,8 @@ export function CartPage() {
                 Your Hardware &amp; License Cart
               </h1>
               <p className="mt-1 text-xs text-slate-400">
-                {totalItems} item{totalItems !== 1 ? 's' : ''} ready for
-                encrypted checkout and express dispatch.
+                {totalItems} item{totalItems !== 1 ? 's' : ''} ready for instant
+                WhatsApp order confirmation and express dispatch.
               </p>
             </div>
             <Link
@@ -100,28 +196,42 @@ export function CartPage() {
               <CheckCircle2 className="h-7 w-7" />
             </span>
             <h2 className="mt-4 text-xl font-extrabold text-slate-900">
-              Order Confirmed!
+              Order Saved &amp; Ready on WhatsApp!
             </h2>
             <p className="mt-1.5 text-xs text-slate-500">
-              Thank you for shopping with NextGenSolutions. Your order reference
-              is:
+              Your order has been recorded and we&apos;ve opened WhatsApp so you can
+              confirm payment and delivery directly with our team.
             </p>
             <p className="mt-3 inline-block rounded-xl border border-sky-200 bg-sky-50 px-5 py-2 font-mono text-base font-extrabold text-[#0284c7]">
-              #{orderConfirmation}
+              #{orderConfirmation.orderNumber}
             </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
-              <Link
-                to="/account"
-                className="rounded-xl bg-[#0284c7] px-5 py-2.5 text-xs font-bold text-white hover:bg-[#0369a1] transition"
+
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <a
+                href={orderConfirmation.whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-[#25D366] px-6 py-3 text-xs font-bold text-white shadow-sm shadow-emerald-500/20 hover:bg-[#1ebe5d] transition"
               >
-                View in Account Dashboard
-              </Link>
-              <Link
-                to="/catalog"
-                className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
-              >
-                Back to Catalog
-              </Link>
+                <MessageCircle className="h-4 w-4" />
+                <span>Send Order on WhatsApp</span>
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+
+              <div className="flex flex-wrap justify-center gap-3 pt-1">
+                <Link
+                  to="/account"
+                  className="rounded-xl bg-[#0284c7] px-5 py-2.5 text-xs font-bold text-white hover:bg-[#0369a1] transition"
+                >
+                  View in Account Dashboard
+                </Link>
+                <Link
+                  to="/catalog"
+                  className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Back to Catalog
+                </Link>
+              </div>
             </div>
           </div>
         ) : items.length === 0 ? (
@@ -187,7 +297,7 @@ export function CartPage() {
                             {item.name}
                           </h3>
                           <p className="mt-1 text-xs text-slate-500">
-                            Unit Price: $
+                            Unit Price: Rs.{' '}
                             {item.price.toLocaleString('en-US', {
                               minimumFractionDigits: 2,
                             })}
@@ -225,8 +335,8 @@ export function CartPage() {
                         </div>
 
                         {/* Line Total */}
-                        <p className="w-24 text-right text-sm font-extrabold text-slate-900">
-                          $
+                        <p className="w-28 text-right text-sm font-extrabold text-slate-900">
+                          Rs.{' '}
                           {(item.price * item.quantity).toLocaleString(
                             'en-US',
                             {
@@ -251,14 +361,18 @@ export function CartPage() {
               </div>
             </div>
 
-            {/* Right: Order Summary & Checkout Form */}
+            {/* Right: Order Summary & WhatsApp Checkout Form */}
             <aside className="lg:col-span-4 lg:sticky lg:top-20">
               <form
                 onSubmit={handlePlaceOrder}
                 className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md shadow-slate-200/60"
               >
-                <div className="bg-[#0d1726] px-6 py-4 text-white">
+                <div className="bg-[#0d1726] px-6 py-4 text-white flex items-center justify-between">
                   <h2 className="text-sm font-bold">Order Summary &amp; Checkout</h2>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+                    <MessageCircle className="h-3 w-3" />
+                    WhatsApp Order
+                  </span>
                 </div>
 
                 <div className="space-y-4 p-6">
@@ -266,7 +380,7 @@ export function CartPage() {
                     <div className="flex justify-between text-slate-500">
                       <span>Subtotal</span>
                       <span className="font-semibold text-slate-800">
-                        $
+                        Rs.{' '}
                         {subtotal.toLocaleString('en-US', {
                           minimumFractionDigits: 2,
                         })}
@@ -277,19 +391,19 @@ export function CartPage() {
                       <span className="font-semibold text-emerald-600">
                         {shipping === 0
                           ? 'Free'
-                          : `$${shipping.toFixed(2)}`}
+                          : `Rs. ${shipping.toFixed(2)}`}
                       </span>
                     </div>
                     <div className="flex justify-between text-slate-500">
                       <span>Estimated Tax (8%)</span>
                       <span className="font-semibold text-slate-800">
-                        ${tax.toFixed(2)}
+                        Rs. {tax.toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between border-t border-slate-100 pt-3 text-sm">
                       <span className="font-bold text-slate-900">Total</span>
                       <span className="text-lg font-extrabold text-[#0284c7]">
-                        $
+                        Rs.{' '}
                         {total.toLocaleString('en-US', {
                           minimumFractionDigits: 2,
                         })}
@@ -307,8 +421,8 @@ export function CartPage() {
                         required
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="Alex Miller"
-                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none"
+                        placeholder="e.g. Kasun Perera"
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
                       />
                     </div>
                     <div>
@@ -320,8 +434,8 @@ export function CartPage() {
                         required
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
-                        placeholder="alex@company.com"
-                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none"
+                        placeholder="e.g. kasun.perera@gmail.com"
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
                       />
                     </div>
                     <div>
@@ -333,23 +447,39 @@ export function CartPage() {
                         required
                         value={shippingAddress}
                         onChange={(e) => setShippingAddress(e.target.value)}
-                        placeholder="Street, City, Postal Code"
-                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none"
+                        placeholder="e.g. 45/2 Galle Road, Piliyandala, 10300"
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
                       />
                     </div>
                   </div>
 
+                  <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/70 p-3 text-[11px] text-emerald-800">
+                    No online card payment needed. Clicking below saves your order
+                    and opens WhatsApp directly with our admin to confirm payment
+                    &amp; delivery.
+                  </div>
+
                   <button
                     type="submit"
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] py-3 text-xs font-bold text-white shadow-sm shadow-sky-500/20 hover:from-[#0369a1] hover:to-[#0284c7] transition cursor-pointer"
+                    disabled={submitting}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#16a34a] to-[#25D366] py-3 text-xs font-bold text-white shadow-sm shadow-emerald-500/25 hover:from-[#15803d] hover:to-[#16a34a] disabled:opacity-60 transition cursor-pointer"
                   >
-                    <span>Place Order</span>
-                    <ArrowRight className="h-4 w-4" />
+                    {submitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Preparing WhatsApp Order...</span>
+                      </>
+                    ) : (
+                      <>
+                        <MessageCircle className="h-4 w-4" />
+                        <span>Place Order via WhatsApp</span>
+                      </>
+                    )}
                   </button>
 
                   <div className="flex items-center justify-center gap-4 pt-1 text-[10px] text-slate-400">
                     <span className="inline-flex items-center gap-1">
-                      <Lock className="h-3 w-3" /> 256-bit SSL
+                      <MessageCircle className="h-3 w-3 text-emerald-500" /> Direct Admin Chat
                     </span>
                     <span className="inline-flex items-center gap-1">
                       <Truck className="h-3 w-3" /> Express Insured

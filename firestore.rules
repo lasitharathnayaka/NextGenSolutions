@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isStaff() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'technician'];
+    }
+
+    // Users / Profiles
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isStaff());
+      allow create: if isSignedIn() && request.auth.uid == userId
+        && request.resource.data.role == 'customer';
+      allow update: if isSignedIn() && (
+        (request.auth.uid == userId && request.resource.data.role == resource.data.role) ||
+        isStaff()
+      );
+      allow delete: if isStaff();
+    }
+
+    // Hardware Products (Public read; Staff write)
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    // Product Reviews
+    match /product_reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow delete: if isSignedIn() && (resource.data.user_id == request.auth.uid || isStaff());
+    }
+
+    // Software Products (Public read; Staff write)
+    match /software_products/{softwareId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    // Software License Keys (Strict: customers only read keys assigned to them)
+    match /software_license_keys/{keyId} {
+      allow read: if isSignedIn() && (resource.data.assigned_to_user_id == request.auth.uid || isStaff());
+      allow write: if isStaff();
+    }
+
+    // Orders
+    match /orders/{orderId} {
+      allow create: if isSignedIn();
+      allow read: if isSignedIn() && (resource.data.user_id == request.auth.uid || isStaff());
+      allow update, delete: if isStaff();
+    }
+
+    // Repair Bookings
+    match /repair_bookings/{bookingId} {
+      allow create: if isSignedIn();
+      allow read: if isSignedIn() && (resource.data.user_id == request.auth.uid || isStaff());
+      allow update: if isSignedIn() && (resource.data.user_id == request.auth.uid || isStaff());
+      allow delete: if isStaff();
+    }
+
+    // Support Tickets
+    match /support_tickets/{ticketId} {
+      allow create: if true;
+      allow read: if isSignedIn() && (resource.data.user_id == request.auth.uid || isStaff());
+      allow update, delete: if isStaff();
+    }
+
+    // Saved Addresses
+    match /saved_addresses/{addressId} {
+      allow read, write: if isSignedIn() && (
+        (resource == null && request.resource.data.user_id == request.auth.uid) ||
+        (resource != null && resource.data.user_id == request.auth.uid)
+      );
+    }
+
+    // Newsletter Subscribers
+    match /newsletter_subscribers/{subscriberId} {
+      allow create: if true;
+      allow read, update, delete: if isStaff();
+    }
+  }
+}

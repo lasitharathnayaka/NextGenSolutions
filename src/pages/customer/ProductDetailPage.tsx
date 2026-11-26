@@ -23,6 +23,7 @@ import {
   type ProductReview,
 } from '@/data/productDetails';
 import { useCart } from '@/contexts/CartContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 type DetailTab = 'specs' | 'compatibility' | 'reviews';
@@ -31,6 +32,7 @@ export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { user } = useAuth();
 
   const product = getProductDetailById(id);
 
@@ -69,6 +71,15 @@ export function ProductDetailPage() {
   const totalPrice = activeCondition.price * quantity;
 
   const handleAddToCart = () => {
+    if (!user) {
+      navigate('/login', {
+        state: {
+          from: `/product/${product.id}`,
+          notice: 'Please sign in to add items to your cart.',
+        },
+      });
+      return;
+    }
     for (let i = 0; i < quantity; i += 1) {
       addToCart({
         id: `${product.id}-${activeCondition.id}`,
@@ -154,7 +165,7 @@ export function ProductDetailPage() {
             </span>
             <span className="inline-flex items-center gap-1.5">
               <Truck className="h-3.5 w-3.5 text-sky-400" />
-              <span>Free Express Shipping &gt; $500</span>
+              <span>Free Express Shipping &gt; Rs. 150,000</span>
             </span>
           </div>
         </div>
@@ -343,7 +354,7 @@ export function ProductDetailPage() {
                             isSelected ? 'text-[#0284c7]' : 'text-slate-900',
                           )}
                         >
-                          $
+                          Rs.{' '}
                           {tier.price.toLocaleString('en-US', {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
@@ -454,7 +465,7 @@ export function ProductDetailPage() {
                     <>
                       <ShoppingCart className="h-4 w-4" />
                       <span>
-                        Add to Cart — $
+                        Add to Cart — Rs.{' '}
                         {totalPrice.toLocaleString('en-US', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
