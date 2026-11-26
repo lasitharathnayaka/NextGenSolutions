@@ -49,7 +49,42 @@ export async function fetchProducts(): Promise<DbProduct[] | null> {
   }
 }
 
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as
+  | string
+  | undefined;
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env
+  .VITE_CLOUDINARY_UPLOAD_PRESET as string | undefined;
+
 export async function uploadProductImage(file: File): Promise<string | null> {
+  // Primary: Cloudinary unsigned upload (Free tier, no credit card needed)
+  if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_UPLOAD_PRESET) {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+      formData.append('folder', 'nextgensolutions/products');
+
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+        },
+      );
+      if (!res.ok) {
+        throw new Error(`Cloudinary upload failed (${res.status})`);
+      }
+      const data = (await res.json()) as { secure_url?: string };
+      if (data.secure_url) {
+        // Inject automatic format & quality optimization for fast loading
+        return data.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
+      }
+    } catch (err) {
+      console.error('Failed to upload image to Cloudinary:', err);
+    }
+  }
+
+  // Fallback: Firebase Storage (if Blaze plan is enabled)
   if (!isFirebaseConfigured || !storage) return null;
   try {
     const ext = file.name.split('.').pop() || 'jpg';
