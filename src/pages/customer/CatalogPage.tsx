@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ChevronRight,
   ChevronDown,
@@ -30,7 +30,48 @@ import {
   type RamCapacity,
 } from '@/data/catalogProducts';
 import { useCart } from '@/contexts/CartContext';
+import { useFavorites } from '@/contexts/FavoritesContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { fetchProducts, type DbProduct } from '@/services/productsService';
 import { cn } from '@/lib/utils';
+
+function mapDbProductToCatalog(p: DbProduct): CatalogProduct {
+  const category: ProductCategory =
+    p.category === 'Laptops' ||
+    p.category === 'Desktops' ||
+    p.category === 'RAM' ||
+    p.category === 'SSD / Storage'
+      ? p.category
+      : 'RAM';
+  const brand: ProductBrand =
+    p.brand === 'Dell' ||
+    p.brand === 'Lenovo' ||
+    p.brand === 'HP' ||
+    p.brand === 'ASUS' ||
+    p.brand === 'Samsung' ||
+    p.brand === 'Kingston'
+      ? p.brand
+      : 'Dell';
+  const conditionRank =
+    p.condition === 'Brand New' ? 1 : p.condition === 'Used - Grade A' ? 2 : 3;
+
+  return {
+    id: p.slug || p.id,
+    sku: p.sku,
+    name: p.name,
+    condition: p.condition,
+    conditionLabel: p.condition_label || p.condition,
+    conditionRank,
+    category,
+    brand,
+    ramCapacity: p.ram_capacity ?? undefined,
+    specs: p.specs && p.specs.length > 0 ? p.specs : [p.subtitle || 'Enterprise Grade'],
+    warranty: p.warranty || '1 Yr Official Warranty',
+    warrantyTone: p.warranty_tone || 'official',
+    price: Number(p.price),
+    image: p.image_urls?.[0] || '/images/dell-xps-15.jpg',
+  };
+}
 
 type SortOption = 'condition' | 'price-asc' | 'price-desc' | 'name';
 type ViewMode = 'grid' | 'list';
@@ -52,17 +93,36 @@ const BRANDS: ProductBrand[] = ['Dell', 'Lenovo', 'HP', 'ASUS', 'Samsung'];
 
 const RAM_OPTIONS: RamCapacity[] = ['16GB', '32GB', '64GB'];
 
-const MIN_PRICE = 100;
-const MAX_PRICE = 3500;
+const MIN_PRICE = 25000;
+const MAX_PRICE = 1050000;
 const ITEMS_PER_PAGE = 6;
 
 export function CatalogPage() {
   const { addToCart } = useCart();
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const urlQuery = searchParams.get('q') ?? '';
   const initialCategory = searchParams.get('category') as ProductCategory | null;
 
+  const [catalogItems, setCatalogItems] = useState<CatalogProduct[]>(CATALOG_PRODUCTS);
   const [selectedConditions, setSelectedConditions] = useState<ProductCondition[]>([]);
+
+  useEffect(() => {
+    fetchProducts().then((rows) => {
+      if (!rows || rows.length === 0) return;
+      const liveMapped = rows
+        .filter((r) => r.is_active !== false)
+        .map(mapDbProductToCatalog);
+      const liveIds = new Set(liveMapped.map((item) => item.id));
+      const merged = [
+        ...liveMapped,
+        ...CATALOG_PRODUCTS.filter((item) => !liveIds.has(item.id)),
+      ];
+      setCatalogItems(merged);
+    });
+  }, []);
   const [selectedCategories, setSelectedCategories] = useState<ProductCategory[]>(
     initialCategory && CATEGORIES.includes(initialCategory)
       ? [initialCategory]
@@ -76,9 +136,12 @@ export function CatalogPage() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [urlQuery]);
+
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [compareModalOpen, setCompareModalOpen] = useState(false);
-  const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
   const [recentlyAdded, setRecentlyAdded] = useState<Record<string, boolean>>({});
   const [openSections, setOpenSections] = useState({
     condition: true,
@@ -123,8 +186,17 @@ export function CatalogPage() {
     setCurrentPage(1);
   };
 
-  const toggleWishlist = (id: string) => {
-    setWishlist((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleWishlist = (product: CatalogProduct) => {
+    toggleFavorite({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      image: product.image,
+      badge: product.conditionLabel,
+      category: `${product.brand} · ${product.category}`,
+      warranty: product.warranty,
+      href: `/product/${product.id}`,
+    });
   };
 
   const clearAllFilters = () => {
@@ -142,17 +214,17 @@ export function CatalogPage() {
   const conditionCounts = useMemo(() => {
     return CONDITIONS.reduce<Record<ProductCondition, number>>(
       (acc, cond) => {
-        acc[cond] = CATALOG_PRODUCTS.filter((p) => p.condition === cond).length;
+        acc[cond] = catalogItems.filter((p) => p.condition === cond).length;
         return acc;
       },
       { 'Brand New': 0, 'Used - Grade A': 0, 'Used - Grade B': 0 },
     );
-  }, []);
+  }, [catalogItems]);
 
   const filteredProducts = useMemo(() => {
     const query = urlQuery.trim().toLowerCase();
 
-    const filtered = CATALOG_PRODUCTS.filter((item) => {
+    const filtered = catalogItems.filter((item) => {
       if (
         selectedConditions.length > 0 &&
         !selectedConditions.includes(item.condition)
@@ -180,11 +252,13 @@ export function CatalogPage() {
           item.sku,
           item.brand,
           item.category,
+          item.condition,
           ...item.specs,
         ]
           .join(' ')
           .toLowerCase();
-        if (!haystack.includes(query)) return false;
+        const tokens = query.split(/\s+/);
+        if (!tokens.every((token) => haystack.includes(token))) return false;
       }
       return true;
     });
@@ -217,6 +291,7 @@ export function CatalogPage() {
 
     return sorted;
   }, [
+    catalogItems,
     selectedConditions,
     selectedCategories,
     selectedBrands,
@@ -280,7 +355,7 @@ export function CatalogPage() {
     if (maxPrice < MAX_PRICE) {
       chips.push({
         key: 'price',
-        label: `Up to $${maxPrice.toLocaleString()}`,
+        label: `Up to Rs. ${maxPrice.toLocaleString()}`,
         onRemove: () => {
           setMaxPrice(MAX_PRICE);
           setCurrentPage(1);
@@ -324,6 +399,15 @@ export function CatalogPage() {
   }, [selectedCategories]);
 
   const handleAddToCart = (product: CatalogProduct) => {
+    if (!user) {
+      navigate('/login', {
+        state: {
+          from: '/catalog',
+          notice: 'Please sign in to add items to your cart.',
+        },
+      });
+      return;
+    }
     addToCart({
       id: product.id,
       name: product.name,
@@ -345,8 +429,8 @@ export function CatalogPage() {
   };
 
   const comparedProducts = useMemo(
-    () => CATALOG_PRODUCTS.filter((p) => compareIds.includes(p.id)),
-    [compareIds],
+    () => catalogItems.filter((p) => compareIds.includes(p.id)),
+    [catalogItems, compareIds],
   );
 
   const pricePercent = ((maxPrice - MIN_PRICE) / (MAX_PRICE - MIN_PRICE)) * 100;
@@ -518,7 +602,7 @@ export function CatalogPage() {
               Max Budget
             </span>
             <span className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-[#0284c7]">
-              Up to ${maxPrice.toLocaleString()}
+              Up to Rs. {maxPrice.toLocaleString()}
             </span>
           </button>
 
@@ -528,7 +612,7 @@ export function CatalogPage() {
                 type="range"
                 min={MIN_PRICE}
                 max={MAX_PRICE}
-                step={50}
+                step={5000}
                 value={maxPrice}
                 onChange={(e) => {
                   setMaxPrice(Number(e.target.value));
@@ -540,11 +624,11 @@ export function CatalogPage() {
                 className="h-1.5 w-full cursor-pointer appearance-none rounded-full accent-[#0284c7]"
               />
               <div className="mt-2 flex items-center justify-between text-[10px] font-medium text-slate-400">
-                <span>${MIN_PRICE}</span>
-                <span>${MAX_PRICE.toLocaleString()}</span>
+                <span>Rs. {MIN_PRICE.toLocaleString()}</span>
+                <span>Rs. {MAX_PRICE.toLocaleString()}</span>
               </div>
               <div className="mt-2.5 grid grid-cols-3 gap-1.5">
-                {[500, 1500, 3500].map((preset) => (
+                {[150000, 450000, 1050000].map((preset) => (
                   <button
                     key={preset}
                     type="button"
@@ -559,7 +643,7 @@ export function CatalogPage() {
                         : 'border-slate-200 text-slate-500 hover:border-slate-300',
                     )}
                   >
-                    ≤ ${preset >= 1000 ? `${preset / 1000}k` : preset}
+                    ≤ Rs. {preset >= 1000000 ? `${(preset / 1000000).toFixed(2)}M` : `${preset / 1000}k`}
                   </button>
                 ))}
               </div>
@@ -720,7 +804,7 @@ export function CatalogPage() {
                     : 'border border-slate-700/80 bg-[#121e31] text-slate-300 hover:border-slate-600 hover:text-white',
                 )}
               >
-                All ({CATALOG_PRODUCTS.length})
+                All ({catalogItems.length})
               </button>
               {CATEGORIES.map((cat) => {
                 const isSelected =
@@ -896,7 +980,7 @@ export function CatalogPage() {
                 {paginatedProducts.map((product) => {
                   const isAdded = Boolean(recentlyAdded[product.id]);
                   const isCompared = compareIds.includes(product.id);
-                  const isWishlisted = Boolean(wishlist[product.id]);
+                  const isWishlisted = isFavorite(product.id);
                   const isBrandNew = product.condition === 'Brand New';
 
                   if (viewMode === 'list') {
@@ -965,7 +1049,7 @@ export function CatalogPage() {
                           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
                             <div className="flex items-center gap-4">
                               <p className="text-lg font-extrabold text-slate-900">
-                                $
+                                Rs.{' '}
                                 {product.price.toLocaleString('en-US', {
                                   minimumFractionDigits: 2,
                                 })}
@@ -1059,8 +1143,8 @@ export function CatalogPage() {
                         {/* Top-Right Wishlist Button */}
                         <button
                           type="button"
-                          onClick={() => toggleWishlist(product.id)}
-                          aria-label={`Save ${product.name} to wishlist`}
+                          onClick={() => toggleWishlist(product)}
+                          aria-label={`Save ${product.name} to favourites`}
                           className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-slate-400 shadow-sm backdrop-blur-xs hover:text-rose-500 transition cursor-pointer"
                         >
                           <Heart
@@ -1142,7 +1226,7 @@ export function CatalogPage() {
                               Enterprise Price
                             </p>
                             <p className="text-lg font-extrabold leading-tight text-slate-900">
-                              $
+                              Rs.{' '}
                               {product.price.toLocaleString('en-US', {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2,
@@ -1359,7 +1443,7 @@ export function CatalogPage() {
                         key={p.id}
                         className="px-3 py-2.5 font-extrabold text-slate-900"
                       >
-                        ${p.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        Rs. {p.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </td>
                     ))}
                   </tr>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ShoppingBag,
   Wrench,
@@ -22,6 +22,8 @@ import {
   type FeaturedDealProduct,
 } from '@/data/featuredProducts';
 import { useCart } from '@/contexts/CartContext';
+import { useFavorites } from '@/contexts/FavoritesContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 const CATEGORIES = [
@@ -63,7 +65,7 @@ const BENEFITS = [
   {
     title: 'Express Dispatch',
     description:
-      'Free secure shipping on all orders over $500 with real-time tracking.',
+      'Free secure shipping on all orders over Rs. 150,000 with real-time tracking.',
     icon: Truck,
   },
   {
@@ -133,8 +135,10 @@ const HERO_SLIDES = [
 
 export function HomePage() {
   const { addToCart } = useCart();
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<DealCategory>('all');
-  const [wishlist, setWishlist] = useState<Record<string, boolean>>({});
   const [recentlyAdded, setRecentlyAdded] = useState<Record<string, boolean>>({});
   const [heroSlideIdx, setHeroSlideIdx] = useState(0);
 
@@ -152,11 +156,30 @@ export function HomePage() {
     return product.category === activeTab;
   });
 
-  const toggleWishlist = (id: string) => {
-    setWishlist((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleWishlist = (product: FeaturedDealProduct) => {
+    toggleFavorite({
+      id: product.id,
+      name: product.name,
+      price: product.price,
+      priceSuffix: product.priceSuffix,
+      image: product.image,
+      badge: product.badge,
+      category: product.category,
+      warranty: product.warranty,
+      href: product.category === 'software' ? '/software' : `/product/${product.id}`,
+    });
   };
 
   const handleAddToCart = (product: FeaturedDealProduct) => {
+    if (!user) {
+      navigate('/login', {
+        state: {
+          from: '/',
+          notice: 'Please sign in to add items to your cart.',
+        },
+      });
+      return;
+    }
     addToCart({
       id: product.id,
       name: product.name,
@@ -460,7 +483,7 @@ export function HomePage() {
         {/* Product Grid */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {filteredProducts.map((product) => {
-            const isWishlisted = Boolean(wishlist[product.id]);
+            const isWishlisted = isFavorite(product.id);
             const isAdded = Boolean(recentlyAdded[product.id]);
 
             return (
@@ -493,8 +516,8 @@ export function HomePage() {
                   {/* Wishlist Button */}
                   <button
                     type="button"
-                    onClick={() => toggleWishlist(product.id)}
-                    aria-label={`Save ${product.name} to wishlist`}
+                    onClick={() => toggleWishlist(product)}
+                    aria-label={`Save ${product.name} to favourites`}
                     className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-slate-400 shadow-xs hover:text-rose-500 transition cursor-pointer"
                   >
                     <Heart
@@ -530,7 +553,7 @@ export function HomePage() {
                   <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3.5">
                     <div className="flex items-baseline gap-0.5">
                       <span className="text-base font-extrabold text-slate-900">
-                        $
+                        Rs.{' '}
                         {product.price.toLocaleString('en-US', {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,

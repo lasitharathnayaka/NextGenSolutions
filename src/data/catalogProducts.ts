@@ -34,7 +34,7 @@ export const CATALOG_PRODUCTS: CatalogProduct[] = [
     specs: ['16GB DDR5', '512GB NVMe', 'RTX 4060'],
     warranty: '1 Yr Official Warranty',
     warrantyTone: 'official',
-    price: 1499,
+    price: 449000,
     image: '/images/dell-xps-15.jpg',
   },
   {
@@ -50,7 +50,7 @@ export const CATALOG_PRODUCTS: CatalogProduct[] = [
     specs: ['32GB LPDDR5', '1TB NVMe'],
     warranty: '6 Mo Seller Warranty',
     warrantyTone: 'seller',
-    price: 899,
+    price: 269000,
     image: '/images/thinkpad-x1.jpg',
   },
   {
@@ -66,7 +66,7 @@ export const CATALOG_PRODUCTS: CatalogProduct[] = [
     specs: ['32GB DDR5', '2TB NVMe', 'RTX 4080'],
     warranty: '2 Yr Official Warranty',
     warrantyTone: 'official',
-    price: 2499,
+    price: 749000,
     image: '/images/hp-omen-45l.jpg',
   },
   {
@@ -82,7 +82,7 @@ export const CATALOG_PRODUCTS: CatalogProduct[] = [
     specs: ['16GB RAM', '512GB NVMe'],
     warranty: '6 Mo Seller Warranty',
     warrantyTone: 'seller',
-    price: 649,
+    price: 195000,
     image: '/images/dell-latitude-7430.jpg',
   },
   {
@@ -98,7 +98,7 @@ export const CATALOG_PRODUCTS: CatalogProduct[] = [
     specs: ['32GB Kit (2×16)', '5600MHz'],
     warranty: 'Lifetime Warranty',
     warrantyTone: 'official',
-    price: 129,
+    price: 38500,
     image: '/images/kingston-fury-ram.jpg',
   },
   {
@@ -114,7 +114,7 @@ export const CATALOG_PRODUCTS: CatalogProduct[] = [
     specs: ['16GB DDR4', '1TB NVMe'],
     warranty: '3 Mo Seller Warranty',
     warrantyTone: 'seller',
-    price: 799,
+    price: 239000,
     image: '/images/asus-rog-g14.jpg',
   },
   {
@@ -130,7 +130,7 @@ export const CATALOG_PRODUCTS: CatalogProduct[] = [
     specs: ['64GB DDR5 ECC', '2TB Gen5 NVMe', 'RTX 4090'],
     warranty: '3 Yr Official Warranty',
     warrantyTone: 'official',
-    price: 3299,
+    price: 989000,
     image: '/images/titan-x-pro.jpg',
   },
   {
@@ -145,7 +145,7 @@ export const CATALOG_PRODUCTS: CatalogProduct[] = [
     specs: ['7450 MB/s Read', '2TB M.2 2280', 'Heatsink'],
     warranty: '5 Yr Official Warranty',
     warrantyTone: 'official',
-    price: 189,
+    price: 56500,
     image: '/images/quantum-nvme.jpg',
   },
   {
@@ -161,7 +161,7 @@ export const CATALOG_PRODUCTS: CatalogProduct[] = [
     specs: ['64GB LPDDR5', '2TB NVMe', 'RTX 3500 Ada'],
     warranty: '1 Yr Seller Warranty',
     warrantyTone: 'seller',
-    price: 1999,
+    price: 599000,
     image: '/images/apex-ultrabook.jpg',
   },
   {
@@ -177,7 +177,7 @@ export const CATALOG_PRODUCTS: CatalogProduct[] = [
     specs: ['16GB LPDDR5X', '1TB NVMe', 'AMOLED 3K'],
     warranty: '6 Mo Seller Warranty',
     warrantyTone: 'seller',
-    price: 1149,
+    price: 345000,
     image: '/images/dell-latitude-7430.jpg',
   },
   {
@@ -193,7 +193,7 @@ export const CATALOG_PRODUCTS: CatalogProduct[] = [
     specs: ['32GB DDR5', '1TB NVMe', 'RTX A2000'],
     warranty: '6 Mo Seller Warranty',
     warrantyTone: 'seller',
-    price: 1099,
+    price: 329000,
     image: '/images/hp-omen-45l.jpg',
   },
   {
@@ -209,7 +209,7 @@ export const CATALOG_PRODUCTS: CatalogProduct[] = [
     specs: ['64GB DDR5', '2TB NVMe', 'RTX 4070'],
     warranty: '2 Yr Official Warranty',
     warrantyTone: 'official',
-    price: 2299,
+    price: 689000,
     image: '/images/dell-xps-15.jpg',
   },
 ];

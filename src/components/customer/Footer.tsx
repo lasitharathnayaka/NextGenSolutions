@@ -13,14 +13,16 @@ import {
   Zap,
   Wrench,
 } from 'lucide-react';
+import { subscribeNewsletter } from '@/services/supportService';
 
 export function Footer() {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
 
-  const handleSubscribe = (e: FormEvent) => {
+  const handleSubscribe = async (e: FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
+    await subscribeNewsletter(email.trim());
     setSubscribed(true);
     setEmail('');
     window.setTimeout(() => setSubscribed(false), 3500);
@@ -116,7 +118,7 @@ export function Footer() {
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="h-3.5 w-3.5 text-sky-400 shrink-0" />
-                <span>+1 (800) 555-0199</span>
+                <span>+94 76 033 6703</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-3.5 w-3.5 text-sky-400 shrink-0" />
@@ -284,8 +286,8 @@ export function Footer() {
             </Link>
           </div>
 
-          <div className="flex items-center gap-2">
-            {['VISA', 'Mastercard', 'Amex', '256-bit SSL'].map((badge) => (
+          <div className="flex flex-wrap items-center gap-2">
+            {['WhatsApp Checkout', 'Bank Transfer', 'Cash on Delivery', '256-bit SSL'].map((badge) => (
               <span
                 key={badge}
                 className="rounded border border-slate-800 bg-[#0f1a2d] px-2 py-0.5 text-[10px] font-semibold text-slate-400"

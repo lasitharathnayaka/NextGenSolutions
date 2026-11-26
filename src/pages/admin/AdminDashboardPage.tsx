@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   Download,
   Plus,
@@ -18,12 +18,21 @@ import {
   Check,
   TrendingUp,
   Sparkles,
-  ArrowRight,
   Upload,
   ImagePlus,
   Link2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isFirebaseConfigured } from '@/lib/firebase';
+import {
+  deleteProductById,
+  fetchProducts,
+  uploadProductImage,
+  upsertProduct,
+} from '@/services/productsService';
+import { createSoftwareProductWithKeys } from '@/services/softwareService';
+import { fetchRepairBookings, updateRepairStage } from '@/services/repairsService';
+import { fetchOrders, updateOrderFulfillment } from '@/services/ordersService';
 
 type AdminTab = 'inventory' | 'vault' | 'tickets' | 'orders';
 type ConditionFilter = 'All' | 'Brand New' | 'Used - Grade A' | 'Used - Grade B';
@@ -71,7 +80,7 @@ const INITIAL_INVENTORY: AdminInventoryItem[] = [
     sku: 'NGS-8842',
     serial: 'C02G901NMD6R',
     stock: 14,
-    price: 1499,
+    price: 449000,
     warranty: '1 Yr Warranty',
     image: '/images/dell-xps-15.jpg',
   },
@@ -84,7 +93,7 @@ const INITIAL_INVENTORY: AdminInventoryItem[] = [
     sku: 'NGS-3310',
     serial: 'S6XYNL0W20149',
     stock: 3,
-    price: 169,
+    price: 51000,
     warranty: '6 Mo Seller',
     image: '/images/quantum-nvme.jpg',
   },
@@ -97,7 +106,7 @@ const INITIAL_INVENTORY: AdminInventoryItem[] = [
     sku: 'NGS-9921',
     serial: 'NV4070TI-8812',
     stock: 0,
-    price: 799,
+    price: 239000,
     warranty: '3 Yr Warranty',
     image: '/images/titan-x-pro.jpg',
   },
@@ -110,7 +119,7 @@ const INITIAL_INVENTORY: AdminInventoryItem[] = [
     sku: 'NGS-1102',
     serial: 'FVFCX0XYZQ6L',
     stock: 8,
-    price: 3499,
+    price: 1049000,
     warranty: '1 Yr Warranty',
     image: '/images/apex-ultrabook.jpg',
   },
@@ -123,7 +132,7 @@ const INITIAL_INVENTORY: AdminInventoryItem[] = [
     sku: 'NGS-5540',
     serial: 'CR5600K-9901',
     stock: 22,
-    price: 115,
+    price: 34500,
     warranty: 'Lifetime',
     image: '/images/kingston-fury-ram.jpg',
   },
@@ -136,7 +145,7 @@ const INITIAL_INVENTORY: AdminInventoryItem[] = [
     sku: 'NGS-4412',
     serial: 'LNX1C11-4402',
     stock: 5,
-    price: 899,
+    price: 269000,
     warranty: '6 Mo Seller',
     image: '/images/thinkpad-x1.jpg',
   },
@@ -149,7 +158,7 @@ const INITIAL_INVENTORY: AdminInventoryItem[] = [
     sku: 'NGS-9011',
     serial: 'HP45L-9011A',
     stock: 2,
-    price: 2499,
+    price: 749000,
     warranty: '2 Yr Warranty',
     image: '/images/hp-omen-45l.jpg',
   },
@@ -172,7 +181,7 @@ const INITIAL_VAULT_KEYS: VaultBatchItem[] = [
     id: 'vk-1',
     product: 'Windows 11 Pro (Retail)',
     platform: 'Windows Platform',
-    price: 199,
+    price: 14500,
     batch: 'BATCH-2026-W11',
     available: 640,
     assigned: 185,
@@ -183,7 +192,7 @@ const INITIAL_VAULT_KEYS: VaultBatchItem[] = [
     id: 'vk-2',
     product: 'Microsoft Office 2024 Pro Plus',
     platform: 'Win / Mac',
-    price: 249,
+    price: 18500,
     batch: 'BATCH-2026-OFF',
     available: 412,
     assigned: 94,
@@ -194,7 +203,7 @@ const INITIAL_VAULT_KEYS: VaultBatchItem[] = [
     id: 'vk-3',
     product: 'Kaspersky Total Security (5-Device)',
     platform: 'Multi-Platform',
-    price: 79.99,
+    price: 9500,
     batch: 'BATCH-2026-KSP',
     available: 290,
     assigned: 62,
@@ -205,7 +214,7 @@ const INITIAL_VAULT_KEYS: VaultBatchItem[] = [
     id: 'vk-4',
     product: 'Visual Studio 2022 Enterprise',
     platform: 'Windows Enterprise',
-    price: 2999,
+    price: 295000,
     batch: 'BATCH-2026-VS',
     available: 78,
     assigned: 19,
@@ -222,7 +231,7 @@ const INITIAL_TICKETS: ServiceTicketItem[] = [
     issue: 'Thermal Repaste & SSD Upgrade',
     engineer: 'Marcus Vance',
     stage: 'In Repair',
-    estimate: '$45.00',
+    estimate: 'Rs. 13,500.00',
   },
   {
     id: 'NGS-4098',
@@ -231,7 +240,7 @@ const INITIAL_TICKETS: ServiceTicketItem[] = [
     issue: 'USB-C Controller Diagnostics',
     engineer: 'Elena Rostova',
     stage: 'Diagnosing',
-    estimate: '$25.00',
+    estimate: 'Rs. 7,500.00',
   },
   {
     id: 'NGS-4104',
@@ -240,7 +249,7 @@ const INITIAL_TICKETS: ServiceTicketItem[] = [
     issue: 'Liquid Cooler Pump Replacement',
     engineer: 'Marcus Vance',
     stage: 'Ready for Pickup',
-    estimate: '$135.00',
+    estimate: 'Rs. 40,500.00',
   },
 ];
 
@@ -249,7 +258,7 @@ const INITIAL_ORDERS: CustomerOrderItem[] = [
     id: 'NGS-8842',
     customer: 'Alex Miller',
     items: 'Dell XPS 15 Creator Edition',
-    total: '$1,499.00',
+    total: 'Rs. 449,000.00',
     payment: 'Paid',
     fulfillment: 'Shipped (FedEx)',
   },
@@ -257,7 +266,7 @@ const INITIAL_ORDERS: CustomerOrderItem[] = [
     id: 'NGS-8845',
     customer: 'Nadia Fernando',
     items: 'Kingston Fury Beast 32GB DDR5 × 2',
-    total: '$258.00',
+    total: 'Rs. 77,000.00',
     payment: 'Paid',
     fulfillment: 'Processing',
   },
@@ -265,7 +274,7 @@ const INITIAL_ORDERS: CustomerOrderItem[] = [
     id: 'NGS-8710',
     customer: 'Alex Miller',
     items: 'Samsung 990 PRO 2TB NVMe',
-    total: '$189.00',
+    total: 'Rs. 56,500.00',
     payment: 'Paid',
     fulfillment: 'Delivered',
   },
@@ -292,6 +301,65 @@ export function AdminDashboardPage() {
   const [vaultBatches, setVaultBatches] = useState<VaultBatchItem[]>(INITIAL_VAULT_KEYS);
   const [tickets, setTickets] = useState<ServiceTicketItem[]>(INITIAL_TICKETS);
   const [orders, setOrders] = useState<CustomerOrderItem[]>(INITIAL_ORDERS);
+
+  // Sync live data from Supabase when .env credentials are configured
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+
+    fetchProducts().then((rows) => {
+      if (rows && rows.length > 0) {
+        setInventory(
+          rows.map((r) => ({
+            id: r.id,
+            name: r.name,
+            subtitle: r.subtitle ?? '',
+            category: r.category === 'RAM' || r.category === 'SSD / Storage' ? 'Storage' : r.category,
+            condition: r.condition,
+            sku: r.sku,
+            serial: r.serial_number ?? 'N/A',
+            stock: r.stock,
+            price: Number(r.price),
+            warranty: r.warranty,
+            image: r.image_urls[0] ?? '/images/dell-xps-15.jpg',
+          })),
+        );
+      }
+    });
+
+    fetchRepairBookings().then((rows) => {
+      if (rows && rows.length > 0) {
+        setTickets(
+          rows.map((r) => ({
+            id: r.ticket_number,
+            customer: r.customer_name ?? 'Customer',
+            device: r.brand_model,
+            issue: r.service_package,
+            engineer: r.lead_engineer,
+            stage: r.stage === 'Completed' ? 'Ready for Pickup' : r.stage,
+            estimate: `Rs. ${Number(r.total_due).toFixed(2)}`,
+          })),
+        );
+      }
+    });
+
+    fetchOrders().then((rows) => {
+      if (rows && rows.length > 0) {
+        setOrders(
+          rows.map((r) => ({
+            id: r.order_number,
+            customer: r.customer_name,
+            items:
+              r.order_items?.map((i) => `${i.item_name} × ${i.quantity}`).join(', ') ||
+              'Hardware Order',
+            total: `Rs. ${Number(r.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+            payment: r.payment_status,
+            fulfillment:
+              r.fulfillment_status === 'Cancelled' ? 'Processing' : r.fulfillment_status,
+          })),
+        );
+      }
+    });
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>('All');
@@ -391,9 +459,19 @@ export function AdminDashboardPage() {
     setSoftwareModalOpen(true);
   };
 
-  const handleSaveSoftwareKeys = (e: FormEvent) => {
+  const handleSaveSoftwareKeys = async (e: FormEvent) => {
     e.preventDefault();
     if (!swProductName.trim() || parsedNewKeys.length === 0) return;
+
+    if (!targetBatchId && isFirebaseConfigured) {
+      await createSoftwareProductWithKeys({
+        name: swProductName.trim(),
+        platform: swPlatform.trim() || 'Multi-Platform',
+        price: Math.max(0, Number(swPrice) || 0),
+        batch_code: swBatchCode.trim() || `BATCH-${Date.now()}`,
+        keys: parsedNewKeys,
+      });
+    }
 
     if (targetBatchId) {
       setVaultBatches((prev) =>
@@ -458,10 +536,20 @@ export function AdminDashboardPage() {
     setProductModalOpen(true);
   };
 
-  const handleImageFiles = (files: FileList | null) => {
+  const handleImageFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    Array.from(files).forEach((file) => {
-      if (!file.type.startsWith('image/')) return;
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith('image/')) continue;
+
+      // Upload to Supabase Storage when configured; otherwise use local Data URL preview
+      if (isFirebaseConfigured) {
+        const publicUrl = await uploadProductImage(file);
+        if (publicUrl) {
+          setFormImages((prev) => [...prev, publicUrl]);
+          continue;
+        }
+      }
+
       const reader = new FileReader();
       reader.onload = () => {
         if (typeof reader.result === 'string') {
@@ -469,7 +557,7 @@ export function AdminDashboardPage() {
         }
       };
       reader.readAsDataURL(file);
-    });
+    }
   };
 
   const handleAddImageUrl = () => {
@@ -491,7 +579,7 @@ export function AdminDashboardPage() {
     setFormImages((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const handleSaveProduct = (e: FormEvent) => {
+  const handleSaveProduct = async (e: FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) return;
 
@@ -509,6 +597,33 @@ export function AdminDashboardPage() {
       image: formImages[0] ?? '/images/dell-xps-15.jpg',
     };
 
+    if (isFirebaseConfigured) {
+      const slug = payload.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+      await upsertProduct({
+        slug: `${slug}-${payload.sku.toLowerCase()}`,
+        sku: payload.sku,
+        serial_number: payload.serial,
+        name: payload.name,
+        subtitle: payload.subtitle,
+        category: payload.category === 'Storage' ? 'SSD / Storage' : payload.category,
+        brand: payload.name.split(' ')[0] || 'NextGen',
+        condition: payload.condition,
+        condition_label: payload.condition,
+        ram_capacity: null,
+        price: payload.price,
+        stock: payload.stock,
+        warranty: payload.warranty,
+        warranty_tone: payload.condition === 'Brand New' ? 'official' : 'seller',
+        specs: payload.subtitle.split(',').map((s) => s.trim()).filter(Boolean),
+        image_urls: formImages.length > 0 ? formImages : [payload.image],
+        is_featured: false,
+        is_active: true,
+      });
+    }
+
     if (editingItem) {
       setInventory((prev) =>
         prev.map((i) => (i.id === editingItem.id ? payload : i)),
@@ -520,32 +635,86 @@ export function AdminDashboardPage() {
     setProductModalOpen(false);
   };
 
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
     setInventory((prev) => prev.filter((item) => item.id !== id));
+    await deleteProductById(id);
   };
 
-  const advanceTicketStage = (id: string) => {
+  const [savingTicketId, setSavingTicketId] = useState<string | null>(null);
+  const [ticketStatusBanner, setTicketStatusBanner] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
+  const handleTicketStageChange = async (
+    id: string,
+    nextStageValue: ServiceTicketItem['stage'],
+  ) => {
+    const previous = tickets.find((t) => t.id === id)?.stage;
+    if (!previous || previous === nextStageValue) return;
+
+    setTicketStatusBanner(null);
+    setSavingTicketId(id);
     setTickets((prev) =>
-      prev.map((t) => {
-        if (t.id !== id) return t;
-        const idx = TICKET_STAGE_ORDER.indexOf(t.stage);
-        const nextStage =
-          TICKET_STAGE_ORDER[(idx + 1) % TICKET_STAGE_ORDER.length];
-        return { ...t, stage: nextStage };
-      }),
+      prev.map((t) => (t.id === id ? { ...t, stage: nextStageValue } : t)),
     );
+
+    const { error } = await updateRepairStage(id, nextStageValue);
+    setSavingTicketId(null);
+
+    if (error) {
+      setTickets((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, stage: previous } : t)),
+      );
+      setTicketStatusBanner({
+        type: 'error',
+        text: `Failed to update ticket #${id}: ${error}`,
+      });
+    } else {
+      setTicketStatusBanner({
+        type: 'success',
+        text: `Repair ticket #${id} updated to "${nextStageValue}" and synced to customer dashboard.`,
+      });
+    }
   };
 
-  const advanceOrderStage = (id: string) => {
+  const [savingOrderId, setSavingOrderId] = useState<string | null>(null);
+  const [orderStatusBanner, setOrderStatusBanner] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
+  const handleOrderStatusChange = async (
+    id: string,
+    nextStageValue: CustomerOrderItem['fulfillment'],
+  ) => {
+    const previous = orders.find((o) => o.id === id)?.fulfillment;
+    if (!previous || previous === nextStageValue) return;
+
+    setOrderStatusBanner(null);
+    setSavingOrderId(id);
     setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== id) return o;
-        const idx = ORDER_STAGE_ORDER.indexOf(o.fulfillment);
-        const nextStage =
-          ORDER_STAGE_ORDER[(idx + 1) % ORDER_STAGE_ORDER.length];
-        return { ...o, fulfillment: nextStage };
-      }),
+      prev.map((o) => (o.id === id ? { ...o, fulfillment: nextStageValue } : o)),
     );
+
+    const { error } = await updateOrderFulfillment(id, nextStageValue);
+    setSavingOrderId(null);
+
+    if (error) {
+      // Revert optimistic update if Firestore rejected the write
+      setOrders((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, fulfillment: previous } : o)),
+      );
+      setOrderStatusBanner({
+        type: 'error',
+        text: `Failed to save #${id}: ${error}`,
+      });
+    } else {
+      setOrderStatusBanner({
+        type: 'success',
+        text: `Order #${id} updated to "${nextStageValue}" and synced to customer dashboard.`,
+      });
+    }
   };
 
   const handleExportCsv = () => {
@@ -662,7 +831,7 @@ export function AdminDashboardPage() {
               </span>
             </div>
             <p className="mt-2.5 text-2xl font-extrabold tracking-tight text-slate-900">
-              $128,450
+              Rs. 38,535,000
             </p>
             <div className="mt-3 flex items-center gap-2 text-[11px]">
               <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 font-bold text-emerald-600">
@@ -963,7 +1132,7 @@ export function AdminDashboardPage() {
                             </span>
                           </td>
                           <td className="px-4 py-3.5 font-extrabold text-slate-900">
-                            $
+                            Rs.{' '}
                             {item.price.toLocaleString('en-US', {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
@@ -1022,7 +1191,7 @@ export function AdminDashboardPage() {
                     </div>
                     <div className="flex items-center justify-between text-xs border-t border-slate-100 pt-2.5">
                       <span className="font-extrabold text-slate-900">
-                        $
+                        Rs.{' '}
                         {item.price.toLocaleString('en-US', {
                           minimumFractionDigits: 2,
                         })}
@@ -1140,7 +1309,7 @@ export function AdminDashboardPage() {
                       <td className="px-4 py-3.5">
                         <p className="font-bold text-slate-900">{row.product}</p>
                         <p className="text-[11px] text-slate-400">
-                          {row.platform} · ${row.price.toFixed(2)}
+                          {row.platform} · Rs. {row.price.toFixed(2)}
                         </p>
                       </td>
                       <td className="px-4 py-3.5 font-mono text-slate-500">
@@ -1191,11 +1360,23 @@ export function AdminDashboardPage() {
                   Active Technician Repair Queue
                 </h2>
                 <p className="text-xs text-slate-400">
-                  Click &ldquo;Advance Stage&rdquo; to update repair progress in
-                  real time.
+                  Select a stage to update repair progress in real time.
                 </p>
               </div>
             </div>
+
+            {ticketStatusBanner && (
+              <div
+                className={cn(
+                  'mt-4 rounded-xl border px-4 py-2.5 text-xs font-semibold',
+                  ticketStatusBanner.type === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-rose-200 bg-rose-50 text-rose-700',
+                )}
+              >
+                {ticketStatusBanner.text}
+              </div>
+            )}
 
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -1246,14 +1427,26 @@ export function AdminDashboardPage() {
                         {t.estimate}
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <button
-                          type="button"
-                          onClick={() => advanceTicketStage(t.id)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-sky-300 hover:text-[#0284c7] transition cursor-pointer"
+                        <select
+                          aria-label={`Update repair stage for ticket ${t.id}`}
+                          value={t.stage}
+                          disabled={savingTicketId === t.id}
+                          onChange={(e) =>
+                            handleTicketStageChange(
+                              t.id,
+                              e.target.value as ServiceTicketItem['stage'],
+                            )
+                          }
+                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 focus:border-sky-500 focus:outline-none disabled:opacity-50 cursor-pointer"
                         >
-                          <span>Advance</span>
-                          <ArrowRight className="h-3 w-3" />
-                        </button>
+                          {TICKET_STAGE_ORDER.map((stage) => (
+                            <option key={stage} value={stage}>
+                              {savingTicketId === t.id && stage === t.stage
+                                ? 'Saving...'
+                                : stage}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                     </tr>
                   ))}
@@ -1271,9 +1464,22 @@ export function AdminDashboardPage() {
                 Recent Customer Orders
               </h2>
               <p className="text-xs text-slate-400">
-                Track payment status and advance order fulfillment stages.
+                Track payment status and update order fulfillment stages directly.
               </p>
             </div>
+
+            {orderStatusBanner && (
+              <div
+                className={cn(
+                  'mt-4 rounded-xl border px-4 py-2.5 text-xs font-semibold',
+                  orderStatusBanner.type === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-rose-200 bg-rose-50 text-rose-700',
+                )}
+              >
+                {orderStatusBanner.text}
+              </div>
+            )}
 
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -1321,14 +1527,26 @@ export function AdminDashboardPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <button
-                          type="button"
-                          onClick={() => advanceOrderStage(o.id)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-sky-300 hover:text-[#0284c7] transition cursor-pointer"
+                        <select
+                          aria-label={`Update status for order ${o.id}`}
+                          value={o.fulfillment}
+                          disabled={savingOrderId === o.id}
+                          onChange={(e) =>
+                            handleOrderStatusChange(
+                              o.id,
+                              e.target.value as CustomerOrderItem['fulfillment'],
+                            )
+                          }
+                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 focus:border-sky-500 focus:outline-none disabled:opacity-50 cursor-pointer"
                         >
-                          <span>Update</span>
-                          <ArrowRight className="h-3 w-3" />
-                        </button>
+                          {ORDER_STAGE_ORDER.map((stage) => (
+                            <option key={stage} value={stage}>
+                              {savingOrderId === o.id && stage === o.fulfillment
+                                ? 'Saving...'
+                                : stage}
+                            </option>
+                          ))}
+                        </select>
                       </td>
                     </tr>
                   ))}
@@ -1405,7 +1623,7 @@ export function AdminDashboardPage() {
 
                 <div>
                   <label className="block font-semibold text-slate-700">
-                    Price ($)
+                    Price (Rs.)
                   </label>
                   <input
                     type="number"
@@ -1745,7 +1963,7 @@ export function AdminDashboardPage() {
 
                     <div>
                       <label className="block font-semibold text-slate-700">
-                        Price ($)
+                        Price (Rs.)
                       </label>
                       <input
                         type="number"

@@ -18,6 +18,8 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { submitSupportTicket } from '@/services/supportService';
 
 type FaqCategory =
   | 'All'
@@ -60,14 +62,14 @@ const FAQ_ITEMS: FaqItem[] = [
     category: 'Repairs & Diagnostics',
     question: 'What does your "No Fix, No Fee" & 90-Day Labor Warranty cover?',
     answer:
-      'If our engineers cannot resolve the diagnosed hardware fault, you pay $0 for labor. All completed repairs carry a 90-day warranty covering both replaced components and technician workmanship.',
+      'If our engineers cannot resolve the diagnosed hardware fault, you pay Rs. 0 for labor. All completed repairs carry a 90-day warranty covering both replaced components and technician workmanship.',
   },
   {
     id: 'faq-5',
     category: 'Shipping & Returns',
     question: 'Do you offer free shipping and a return window on hardware?',
     answer:
-      'Yes! Orders over $500 qualify for free insured express dispatch with real-time tracking. All retail and certified refurbished hardware includes a 30-day hassle-free return guarantee.',
+      'Yes! Orders over Rs. 150,000 qualify for free insured express dispatch with real-time tracking. All retail and certified refurbished hardware includes a 30-day hassle-free return guarantee.',
   },
   {
     id: 'faq-6',
@@ -87,6 +89,7 @@ const FAQ_CATEGORIES: FaqCategory[] = [
 ];
 
 export function SupportPage() {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<FaqCategory>('All');
   const [openFaqId, setOpenFaqId] = useState<string>(FAQ_ITEMS[0].id);
@@ -124,11 +127,23 @@ export function SupportPage() {
     });
   }, [searchQuery, selectedCategory]);
 
-  const handleTicketSubmit = (e: FormEvent) => {
+  const handleTicketSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !email.trim() || !message.trim()) return;
     const code = Math.floor(2000 + Math.random() * 8000);
-    setSubmittedTicketId(`SUP-${code}`);
+    const ticketNum = `SUP-${code}`;
+
+    await submitSupportTicket({
+      ticketNumber: ticketNum,
+      userId: user?.uid ?? null,
+      fullName: fullName.trim(),
+      email: email.trim(),
+      topic,
+      referenceId: referenceId.trim() || undefined,
+      message: message.trim(),
+    });
+
+    setSubmittedTicketId(ticketNum);
     setFullName('');
     setEmail('');
     setReferenceId('');

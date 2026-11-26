@@ -16,6 +16,8 @@ import {
   MapPin,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { createRepairBooking } from '@/services/repairsService';
 
 type DeviceType = 'laptop' | 'desktop';
 type LogisticsType = 'drop-off' | 'courier';
@@ -36,16 +38,16 @@ const SERVICE_PACKAGES: ServicePackage[] = [
     name: 'Full Thermal Repaste & Deep Clean',
     description:
       'Removes dust, replaces liquid metal/paste, lowers temps up to 15°C.',
-    price: 25,
-    priceDisplay: '$25',
+    price: 7500,
+    priceDisplay: 'Rs. 7,500',
     turnaround: 'Est. 24–48 Hours',
   },
   {
     id: 'ssd-ram-upgrade',
     name: 'SSD/RAM Hardware Upgrade',
     description: 'Professional component installation and stress testing.',
-    price: 15,
-    priceDisplay: '$15 + Parts',
+    price: 4500,
+    priceDisplay: 'Rs. 4,500 + Parts',
     plusParts: true,
     turnaround: 'Same Day (4–6 Hrs)',
   },
@@ -54,8 +56,8 @@ const SERVICE_PACKAGES: ServicePackage[] = [
     name: 'OS Install & Data Backup',
     description:
       'Clean OS reinstallation, driver updates, and user data migration.',
-    price: 20,
-    priceDisplay: '$20',
+    price: 6000,
+    priceDisplay: 'Rs. 6,000',
     turnaround: 'Est. 12–24 Hours',
   },
   {
@@ -63,8 +65,8 @@ const SERVICE_PACKAGES: ServicePackage[] = [
     name: 'Advanced Hardware Diagnostics',
     description:
       'Full component bench test, motherboard short detection & report.',
-    price: 10,
-    priceDisplay: '$10',
+    price: 3000,
+    priceDisplay: 'Rs. 3,000',
     turnaround: 'Est. 24 Hours',
   },
 ];
@@ -75,10 +77,11 @@ const TIME_SLOTS = [
   '04:00 PM - 06:00 PM',
 ];
 
-const COURIER_FEE = 12;
+const COURIER_FEE = 1500;
 const TAX_RATE = 0.08;
 
 export function BookRepairPage() {
+  const { user, profile } = useAuth();
   const [deviceType, setDeviceType] = useState<DeviceType>('laptop');
   const [selectedServiceId, setSelectedServiceId] = useState<string>(
     SERVICE_PACKAGES[0].id,
@@ -103,7 +106,7 @@ export function BookRepairPage() {
   const estimatedTax = Number((subtotal * TAX_RATE).toFixed(2));
   const totalDue = subtotal + estimatedTax;
 
-  const handleConfirmBooking = (e: FormEvent) => {
+  const handleConfirmBooking = async (e: FormEvent) => {
     e.preventDefault();
     if (!brandModel.trim()) {
       setFormError('Please enter your device Brand / Model.');
@@ -124,7 +127,28 @@ export function BookRepairPage() {
 
     setFormError(null);
     const randomCode = Math.floor(1000 + Math.random() * 9000);
-    setConfirmedTicket(`NGS-REP-${randomCode}`);
+    const ticketNum = `NGS-REP-${randomCode}`;
+
+    await createRepairBooking({
+      ticketNumber: ticketNum,
+      userId: user?.uid ?? null,
+      customerName: profile?.full_name ?? null,
+      customerEmail: user?.email ?? null,
+      deviceType,
+      servicePackage: selectedService.name,
+      brandModel: brandModel.trim(),
+      serialNumber: serialNumber.trim() || undefined,
+      issueDescription: issueDescription.trim(),
+      logisticsType: logistics,
+      pickupAddress: pickupAddress.trim() || undefined,
+      preferredDate,
+      timeSlot: selectedSlot,
+      subtotal,
+      tax: estimatedTax,
+      totalDue,
+    });
+
+    setConfirmedTicket(ticketNum);
   };
 
   return (
@@ -562,7 +586,7 @@ export function BookRepairPage() {
                       </p>
                     </div>
                     <span className="shrink-0 font-bold text-slate-900">
-                      ${selectedService.price.toFixed(2)}
+                      Rs. {selectedService.price.toFixed(2)}
                     </span>
                   </div>
 
@@ -576,7 +600,7 @@ export function BookRepairPage() {
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <span className="font-bold text-slate-900">$0.00</span>{' '}
+                      <span className="font-bold text-slate-900">Rs. 0.00</span>{' '}
                       <span className="text-[10px] font-bold text-emerald-600">
                         Included
                       </span>
@@ -597,7 +621,7 @@ export function BookRepairPage() {
                       </p>
                     </div>
                     <span className="shrink-0 font-bold text-slate-900">
-                      {shippingFee === 0 ? 'Free' : `$${shippingFee.toFixed(2)}`}
+                      {shippingFee === 0 ? 'Free' : `Rs. ${shippingFee.toFixed(2)}`}
                     </span>
                   </div>
                 </div>
@@ -607,13 +631,13 @@ export function BookRepairPage() {
                   <div className="flex items-center justify-between text-slate-500">
                     <span>Subtotal</span>
                     <span className="font-semibold text-slate-700">
-                      ${subtotal.toFixed(2)}
+                      Rs. {subtotal.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-slate-500">
                     <span>Estimated Tax</span>
                     <span className="font-semibold text-slate-700">
-                      ${estimatedTax.toFixed(2)}
+                      Rs. {estimatedTax.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between pt-2 text-sm">
@@ -621,7 +645,7 @@ export function BookRepairPage() {
                       Total Due at Service
                     </span>
                     <span className="text-lg font-extrabold text-[#0284c7]">
-                      ${totalDue.toFixed(2)}
+                      Rs. {totalDue.toFixed(2)}
                       {selectedService.plusParts ? '*' : ''}
                     </span>
                   </div>
@@ -740,7 +764,7 @@ export function BookRepairPage() {
                 <div className="flex justify-between gap-2 border-t border-slate-100 pt-2">
                   <dt className="font-bold text-slate-900">Total Due:</dt>
                   <dd className="font-extrabold text-slate-900">
-                    ${totalDue.toFixed(2)}
+                    Rs. {totalDue.toFixed(2)}
                   </dd>
                 </div>
               </dl>

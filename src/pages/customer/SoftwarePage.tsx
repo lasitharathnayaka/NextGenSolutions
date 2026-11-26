@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
   Zap,
@@ -14,10 +14,6 @@ import {
   Code2,
   Check,
   ShoppingCart,
-  Lock,
-  Eye,
-  EyeOff,
-  Download,
   HelpCircle,
   MessageSquare,
   X,
@@ -25,6 +21,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
 type SortOption = 'featured' | 'price-asc' | 'price-desc' | 'name';
@@ -63,7 +60,7 @@ const SOFTWARE_LICENSES: SoftwareLicense[] = [
       'Lifetime Activation Guarantee',
     ],
     priceLabel: 'Retail Price',
-    price: 199,
+    price: 14500,
     icon: 'monitor',
     accentBg: 'bg-sky-50 border border-sky-100',
     accentText: 'text-sky-600',
@@ -83,7 +80,7 @@ const SOFTWARE_LICENSES: SoftwareLicense[] = [
       'Offline Desktop Apps',
     ],
     priceLabel: 'Retail Price',
-    price: 249,
+    price: 18500,
     icon: 'office',
     accentBg: 'bg-orange-50 border border-orange-100',
     accentText: 'text-orange-600',
@@ -102,7 +99,7 @@ const SOFTWARE_LICENSES: SoftwareLicense[] = [
       'Safe Money Banking Protection',
     ],
     priceLabel: 'Annual Price',
-    price: 79.99,
+    price: 9500,
     icon: 'shield',
     accentBg: 'bg-emerald-50 border border-emerald-100',
     accentText: 'text-emerald-600',
@@ -121,7 +118,7 @@ const SOFTWARE_LICENSES: SoftwareLicense[] = [
       'Priority feature updates',
     ],
     priceLabel: 'Annual Price',
-    price: 599,
+    price: 179000,
     icon: 'palette',
     accentBg: 'bg-rose-50 border border-rose-100',
     accentText: 'text-rose-600',
@@ -140,7 +137,7 @@ const SOFTWARE_LICENSES: SoftwareLicense[] = [
       'Azure DevOps integration',
     ],
     priceLabel: 'Retail Price',
-    price: 2999,
+    price: 295000,
     icon: 'code',
     accentBg: 'bg-indigo-50 border border-indigo-100',
     accentText: 'text-indigo-600',
@@ -155,27 +152,6 @@ const CATEGORIES: SoftwareCategory[] = [
   'Productivity',
   'Security',
   'Creative & Dev',
-];
-
-const VAULT_INSTANCES = [
-  {
-    id: 'win11',
-    label: 'Windows 11 Pro - Workstation',
-    masked: 'XXXXX-XXXXX-XXXXX-89A2F',
-    full: 'W11P8-9K4M2-7Q9X3-89A2F',
-    installer: 'Official ISO Installer',
-    cdn: 'Direct Microsoft CDN (5.1 GB)',
-    hwId: 'WIN-8849-PRO',
-  },
-  {
-    id: 'office24',
-    label: 'Office 2024 Pro Plus - Seat #1',
-    masked: 'XXXXX-XXXXX-XXXXX-4419B',
-    full: 'OFF24-7N2V9-5P8C1-4419B',
-    installer: 'Offline Click-to-Run',
-    cdn: 'Direct Microsoft CDN (3.8 GB)',
-    hwId: 'OFF-2024-ENT',
-  },
 ];
 
 function LicenseIcon({ type }: { type: SoftwareLicense['icon'] }) {
@@ -195,16 +171,12 @@ function LicenseIcon({ type }: { type: SoftwareLicense['icon'] }) {
 
 export function SoftwarePage() {
   const { addToCart } = useCart();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<SoftwareCategory>('All');
   const [sortBy, setSortBy] = useState<SortOption>('featured');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [recentlyAdded, setRecentlyAdded] = useState<Record<string, boolean>>({});
-
-  // Vault state
-  const [vaultIdx, setVaultIdx] = useState(0);
-  const [keyRevealed, setKeyRevealed] = useState(false);
-  const [copiedNotice, setCopiedNotice] = useState(false);
-  const [downloadStarted, setDownloadStarted] = useState(false);
 
   // Engineer Chat modal state
   const [chatOpen, setChatOpen] = useState(false);
@@ -215,8 +187,6 @@ export function SoftwarePage() {
       text: 'Hello! I am a certified NextGenSolutions activation engineer. Share your Hardware ID or license SKU and I will assist you right away.',
     },
   ]);
-
-  const activeVault = VAULT_INSTANCES[vaultIdx];
 
   const filteredAndSortedLicenses = useMemo(() => {
     const filtered = SOFTWARE_LICENSES.filter((item) =>
@@ -242,6 +212,15 @@ export function SoftwarePage() {
   }, [selectedCategory, sortBy]);
 
   const handleBuyLicense = (license: SoftwareLicense) => {
+    if (!user) {
+      navigate('/login', {
+        state: {
+          from: '/software',
+          notice: 'Please sign in to purchase software licenses.',
+        },
+      });
+      return;
+    }
     addToCart({
       id: license.id,
       name: license.name,
@@ -254,26 +233,6 @@ export function SoftwarePage() {
     }, 1200);
   };
 
-  const handleRevealAndCopy = async () => {
-    if (!keyRevealed) {
-      setKeyRevealed(true);
-      try {
-        await navigator.clipboard.writeText(activeVault.full);
-      } catch {
-        // Fallback when clipboard is restricted
-      }
-      setCopiedNotice(true);
-      window.setTimeout(() => setCopiedNotice(false), 2000);
-    } else {
-      setKeyRevealed(false);
-    }
-  };
-
-  const handleDownloadIso = () => {
-    setDownloadStarted(true);
-    window.setTimeout(() => setDownloadStarted(false), 2500);
-  };
-
   const handleChatSubmit = (e: FormEvent) => {
     e.preventDefault();
     const trimmed = chatInput.trim();
@@ -283,7 +242,7 @@ export function SoftwarePage() {
       { sender: 'user', text: trimmed },
       {
         sender: 'engineer',
-        text: `Thanks! Your activation ticket has been prioritized for Hardware ID ${activeVault.hwId}. A live technician will reply here in under 2 minutes.`,
+        text: 'Thanks! Your activation request has been prioritized. A live technician will reply here in under 2 minutes.',
       },
     ]);
     setChatInput('');
@@ -436,18 +395,16 @@ export function SoftwarePage() {
           </div>
         </div>
 
-        {/* 2-Column Main Layout: License Catalog (Left) + License Vault Sidebar (Right) */}
-        <div className="mt-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-          {/* Left: Licenses Grid / List */}
-          <div className="lg:col-span-8">
-            <div
-              className={cn(
-                'grid gap-5',
-                viewMode === 'grid'
-                  ? 'grid-cols-1 md:grid-cols-2'
-                  : 'grid-cols-1',
-              )}
-            >
+        {/* Full-Width License Catalog */}
+        <div className="mt-6">
+          <div
+            className={cn(
+              'grid gap-5',
+              viewMode === 'grid'
+                ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+                : 'grid-cols-1',
+            )}
+          >
               {filteredAndSortedLicenses.map((license) => {
                 const isAdded = Boolean(recentlyAdded[license.id]);
                 const renderWide =
@@ -463,7 +420,7 @@ export function SoftwarePage() {
                       key={license.id}
                       className={cn(
                         'group rounded-2xl border border-slate-200/80 bg-white p-6 shadow-2xs hover:-translate-y-0.5 hover:border-sky-300/80 hover:shadow-xl hover:shadow-slate-200/60 transition duration-300',
-                        viewMode === 'grid' && 'md:col-span-2',
+                        viewMode === 'grid' && 'md:col-span-2 lg:col-span-3',
                       )}
                     >
                       <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
@@ -522,7 +479,7 @@ export function SoftwarePage() {
                               {license.priceLabel}
                             </p>
                             <p className="text-xl font-extrabold text-slate-900">
-                              $
+                              Rs.{' '}
                               {license.price.toLocaleString('en-US', {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2,
@@ -616,7 +573,7 @@ export function SoftwarePage() {
                           {license.priceLabel}
                         </p>
                         <p className="text-lg font-extrabold text-slate-900">
-                          $
+                          Rs.{' '}
                           {license.price.toLocaleString('en-US', {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2,
@@ -650,159 +607,33 @@ export function SoftwarePage() {
                   </article>
                 );
               })}
-            </div>
           </div>
 
-          {/* Right Sidebar: My License Vault + Activation Assistance */}
-          <aside className="space-y-4 lg:col-span-4 lg:sticky lg:top-20">
-            {/* Dark Navy License Vault Card */}
-            <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-[#0d1726] p-5 text-white shadow-xl">
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-sky-500/15 blur-2xl"
-              />
-
-              <div className="relative flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] px-3 py-1 text-[10px] font-bold text-white shadow-xs">
-                  <Lock className="h-3 w-3" />
-                  <span>My License Vault</span>
-                </span>
-                <div className="flex items-center gap-1 rounded-lg bg-[#142033] p-0.5 border border-slate-800">
-                  {VAULT_INSTANCES.map((inst, idx) => (
-                    <button
-                      key={inst.id}
-                      type="button"
-                      onClick={() => {
-                        setVaultIdx(idx);
-                        setKeyRevealed(false);
-                        setCopiedNotice(false);
-                      }}
-                      className={cn(
-                        'rounded-md px-2 py-0.5 text-[10px] font-semibold transition cursor-pointer',
-                        idx === vaultIdx
-                          ? 'bg-[#0284c7] text-white'
-                          : 'text-slate-400 hover:text-white',
-                      )}
-                    >
-                      #{idx + 1}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <h2 className="mt-4 text-sm font-bold text-white">
-                {activeVault.label}
-              </h2>
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-                Your purchased license key is securely encrypted and stored in
-                your profile vault.
-              </p>
-
-              {/* Product License Key Box */}
-              <div className="mt-4 rounded-xl border border-slate-700/70 bg-[#142033] p-3.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
-                    Product License Key
-                  </span>
-                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-                    Verified
-                  </span>
-                </div>
-
-                <div className="mt-2.5 rounded-lg border border-slate-800 bg-[#09101c] px-3 py-2.5 text-center font-mono text-xs tracking-widest text-slate-100 select-all">
-                  {keyRevealed ? activeVault.full : activeVault.masked}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleRevealAndCopy}
-                  className={cn(
-                    'mt-2.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-bold text-white transition cursor-pointer',
-                    copiedNotice
-                      ? 'bg-emerald-600'
-                      : 'bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] hover:from-[#0369a1] hover:to-[#0284c7]',
-                  )}
-                >
-                  {copiedNotice ? (
-                    <>
-                      <Check className="h-3.5 w-3.5" />
-                      <span>Key Revealed &amp; Copied</span>
-                    </>
-                  ) : keyRevealed ? (
-                    <>
-                      <EyeOff className="h-3.5 w-3.5" />
-                      <span>Hide License Key</span>
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="h-3.5 w-3.5" />
-                      <span>Reveal &amp; Copy Key</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Official ISO Installer Box */}
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-700/70 bg-[#142033] p-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-sky-400">
-                    <Download className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-xs font-bold text-white">
-                      {activeVault.installer}
-                    </p>
-                    <p className="text-[10px] text-slate-400">
-                      {activeVault.cdn}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadIso}
-                  className="shrink-0 rounded-md bg-sky-500/15 px-2.5 py-1 text-[11px] font-semibold text-sky-400 hover:bg-sky-500/25 transition cursor-pointer"
-                >
-                  {downloadStarted ? 'Starting...' : 'Download'}
-                </button>
-              </div>
-
-              {/* Hardware ID Footer */}
-              <div className="mt-4 flex items-center justify-between border-t border-slate-800 pt-3 text-[10px]">
-                <span className="font-mono text-slate-400">
-                  Hardware ID: {activeVault.hwId}
-                </span>
-                <span className="inline-flex items-center gap-1 font-semibold text-emerald-400">
-                  <CheckCircle2 className="h-3 w-3" />
-                  <span>Ready to Activate</span>
-                </span>
-              </div>
-            </div>
-
-            {/* Activation Assistance Card */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
-              <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-50 text-[#0284c7]">
-                  <HelpCircle className="h-4 w-4" />
-                </span>
-                <h3 className="text-xs font-bold text-slate-900">
+          {/* Activation Assistance Banner */}
+          <div className="mt-8 flex flex-col justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-2xs sm:flex-row sm:items-center">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-[#0284c7]">
+                <HelpCircle className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
                   Need Activation Assistance?
                 </h3>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                  Our specialized engineers are available around the clock to
+                  assist with phone or digital token activations.
+                </p>
               </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                Our specialized engineers are available around the clock to
-                assist with phone or digital token activations.
-              </p>
-              <button
-                type="button"
-                onClick={() => setChatOpen(true)}
-                className="mt-3.5 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 py-2.5 text-xs font-semibold text-slate-700 hover:border-sky-200 hover:bg-sky-50/50 hover:text-[#0284c7] transition cursor-pointer"
-              >
-                <MessageSquare className="h-3.5 w-3.5" />
-                <span>Start Engineer Chat</span>
-              </button>
             </div>
-          </aside>
+            <button
+              type="button"
+              onClick={() => setChatOpen(true)}
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-5 py-2.5 text-xs font-bold text-slate-800 hover:border-sky-300 hover:bg-sky-50 hover:text-[#0284c7] transition cursor-pointer"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span>Start Engineer Chat</span>
+            </button>
+          </div>
         </div>
       </div>
 
