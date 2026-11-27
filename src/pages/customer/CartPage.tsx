@@ -13,6 +13,7 @@ import {
   MessageCircle,
   ExternalLink,
   Loader2,
+  Clock,
 } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -76,8 +77,15 @@ function buildWhatsAppOrderUrl(params: {
 
 export function CartPage() {
   const { user } = useAuth();
-  const { items, totalItems, updateQuantity, removeFromCart, clearCart } =
-    useCart();
+  const {
+    items,
+    totalItems,
+    expiredRemovedCount,
+    dismissExpiredNotice,
+    updateQuantity,
+    removeFromCart,
+    clearCart,
+  } = useCart();
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [shippingAddress, setShippingAddress] = useState('');
@@ -190,6 +198,25 @@ export function CartPage() {
       </section>
 
       <div className="mx-auto max-w-7xl px-4 py-8 pb-16 sm:px-6 lg:px-8">
+        {expiredRemovedCount > 0 && (
+          <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+            <span className="inline-flex items-center gap-2 font-medium">
+              <Clock className="h-4 w-4 shrink-0 text-amber-600" />
+              <span>
+                {expiredRemovedCount} item{expiredRemovedCount !== 1 ? 's were' : ' was'}{' '}
+                automatically removed because unpaid cart items expire after 24 hours.
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={dismissExpiredNotice}
+              className="text-[11px] font-bold text-amber-700 hover:underline cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {orderConfirmation ? (
           <div className="mx-auto max-w-lg rounded-2xl border border-emerald-200 bg-white p-8 text-center shadow-sm">
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
@@ -267,10 +294,16 @@ export function CartPage() {
             {/* Left: Cart Items List */}
             <div className="space-y-4 lg:col-span-8">
               <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-                  <h2 className="text-sm font-bold text-slate-900">
-                    Cart Items ({totalItems})
-                  </h2>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-6 py-4">
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="text-sm font-bold text-slate-900">
+                      Cart Items ({totalItems})
+                    </h2>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                      <Clock className="h-3 w-3 text-sky-500" />
+                      <span>Auto-clears after 24h</span>
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={clearCart}

@@ -24,6 +24,7 @@ import {
 import { useCart } from '@/contexts/CartContext';
 import { useFavorites } from '@/contexts/FavoritesContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { subscribeProducts, type DbProduct } from '@/services/productsService';
 import { cn } from '@/lib/utils';
 
 const CATEGORIES = [
@@ -141,6 +142,22 @@ export function HomePage() {
   const [activeTab, setActiveTab] = useState<DealCategory>('all');
   const [recentlyAdded, setRecentlyAdded] = useState<Record<string, boolean>>({});
   const [heroSlideIdx, setHeroSlideIdx] = useState(0);
+  const [liveProducts, setLiveProducts] = useState<DbProduct[]>([]);
+
+  useEffect(() => {
+    const unsub = subscribeProducts((rows) => setLiveProducts(rows));
+    return () => unsub();
+  }, []);
+
+  const isFeaturedInStock = (product: FeaturedDealProduct): boolean => {
+    const match = liveProducts.find(
+      (p) =>
+        p.slug === product.id ||
+        p.id === product.id ||
+        p.name.toLowerCase() === product.name.toLowerCase(),
+    );
+    return match ? Number(match.stock) > 0 : true;
+  };
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -485,6 +502,7 @@ export function HomePage() {
           {filteredProducts.map((product) => {
             const isWishlisted = isFavorite(product.id);
             const isAdded = Boolean(recentlyAdded[product.id]);
+            const inStock = isFeaturedInStock(product);
 
             return (
               <article
@@ -544,9 +562,27 @@ export function HomePage() {
                     ))}
                   </ul>
 
-                  <div className="mt-3 flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
-                    <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-sky-600" />
-                    <span>{product.warranty}</span>
+                  <div className="mt-3 flex items-center justify-between gap-2 text-[11px] font-medium text-slate-500">
+                    <span className="inline-flex items-center gap-1.5">
+                      <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-sky-600" />
+                      <span>{product.warranty}</span>
+                    </span>
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold',
+                        inStock
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-rose-50 text-rose-700',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'h-1.5 w-1.5 rounded-full',
+                          inStock ? 'bg-emerald-500' : 'bg-rose-500',
+                        )}
+                      />
+                      <span>{inStock ? 'In Stock' : 'Out of Stock'}</span>
+                    </span>
                   </div>
 
                   {/* Price + Add CTA */}
@@ -568,15 +604,20 @@ export function HomePage() {
 
                     <button
                       type="button"
+                      disabled={!inStock}
                       onClick={() => handleAddToCart(product)}
                       className={cn(
-                        'inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-semibold text-white transition cursor-pointer',
-                        isAdded
-                          ? 'bg-emerald-600'
-                          : 'bg-[#0284c7] hover:bg-[#0369a1]',
+                        'inline-flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-xs font-semibold transition',
+                        !inStock
+                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                          : isAdded
+                            ? 'bg-emerald-600 text-white cursor-pointer'
+                            : 'bg-[#0284c7] text-white hover:bg-[#0369a1] cursor-pointer',
                       )}
                     >
-                      {isAdded ? (
+                      {!inStock ? (
+                        <span>Out of Stock</span>
+                      ) : isAdded ? (
                         <>
                           <Check className="h-3.5 w-3.5" />
                           <span>Added</span>

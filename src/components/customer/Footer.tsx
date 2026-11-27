@@ -14,18 +14,46 @@ import {
   Wrench,
 } from 'lucide-react';
 import { subscribeNewsletter } from '@/services/supportService';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function Footer() {
+  const { isAdminOrStaff } = useAuth();
   const [email, setEmail] = useState('');
-  const [subscribed, setSubscribed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{
+    type: 'success' | 'info' | 'error';
+    text: string;
+  } | null>(null);
 
   const handleSubscribe = async (e: FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
-    await subscribeNewsletter(email.trim());
-    setSubscribed(true);
-    setEmail('');
-    window.setTimeout(() => setSubscribed(false), 3500);
+    const trimmed = email.trim();
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    setStatusMessage(null);
+
+    const { error } = await subscribeNewsletter(trimmed);
+    setSubmitting(false);
+
+    if (error && error.toLowerCase().includes('permission')) {
+      setStatusMessage({
+        type: 'info',
+        text: `${trimmed} is already subscribed to restock alerts!`,
+      });
+      setEmail('');
+    } else if (error) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Could not subscribe right now. Please try again.',
+      });
+    } else {
+      setStatusMessage({
+        type: 'success',
+        text: `Subscribed! Restock & deal alerts will be sent to ${trimmed}.`,
+      });
+      setEmail('');
+    }
+    window.setTimeout(() => setStatusMessage(null), 5000);
   };
 
   return (
@@ -52,38 +80,54 @@ export function Footer() {
             </p>
           </div>
 
-          <form
-            onSubmit={handleSubscribe}
-            className="flex w-full max-w-md flex-col gap-2.5 sm:flex-row"
-          >
-            <div className="relative flex-1">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your work or personal email"
-                className="w-full rounded-lg border border-slate-700/80 bg-[#0a1220] py-2.5 pl-9 pr-3 text-xs text-white placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
-              />
-            </div>
-            <button
-              type="submit"
-              className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#0284c7] px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-[#0369a1] transition cursor-pointer"
+          <div className="w-full max-w-md">
+            <form
+              onSubmit={handleSubscribe}
+              className="flex w-full flex-col gap-2.5 sm:flex-row"
             >
-              {subscribed ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-                  <span>Subscribed</span>
-                </>
-              ) : (
-                <>
-                  <span>Subscribe</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </>
-              )}
-            </button>
-          </form>
+              <div className="relative flex-1">
+                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your work or personal email"
+                  className="w-full rounded-lg border border-slate-700/80 bg-[#0a1220] py-2.5 pl-9 pr-3 text-xs text-white placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 transition"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#0284c7] px-4 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-[#0369a1] disabled:opacity-60 transition cursor-pointer"
+              >
+                {statusMessage?.type === 'success' ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                    <span>Subscribed</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{submitting ? 'Saving...' : 'Subscribe'}</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </>
+                )}
+              </button>
+            </form>
+            {statusMessage && (
+              <p
+                className={`mt-2 text-[11px] font-medium ${
+                  statusMessage.type === 'error'
+                    ? 'text-rose-400'
+                    : statusMessage.type === 'info'
+                      ? 'text-sky-300'
+                      : 'text-emerald-400'
+                }`}
+              >
+                {statusMessage.text}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Main Navigation & Info Grid */}
@@ -114,11 +158,21 @@ export function Footer() {
               </div>
               <div className="flex items-center gap-2">
                 <Mail className="h-3.5 w-3.5 text-sky-400 shrink-0" />
-                <span>support@nextgensolutions.io</span>
+                <a
+                  href="mailto:support@nextgensolutions.io"
+                  className="hover:text-sky-400 transition"
+                >
+                  support@nextgensolutions.io
+                </a>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="h-3.5 w-3.5 text-sky-400 shrink-0" />
-                <span>+94 76 033 6703</span>
+                <a
+                  href="tel:+94760336703"
+                  className="hover:text-sky-400 transition"
+                >
+                  +94 76 033 6703
+                </a>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-3.5 w-3.5 text-sky-400 shrink-0" />
@@ -228,8 +282,8 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link to="/software" className="hover:text-sky-400 transition">
-                  My License Vault
+                <Link to="/favorites" className="hover:text-sky-400 transition">
+                  Saved Favourites
                 </Link>
               </li>
               <li>
@@ -241,10 +295,17 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link to="/admin" className="hover:text-sky-400 transition">
-                  Admin &amp; Staff Portal
+                <Link to="/support" className="hover:text-sky-400 transition">
+                  Support &amp; Help Center
                 </Link>
               </li>
+              {isAdminOrStaff && (
+                <li>
+                  <Link to="/admin" className="text-sky-400 hover:text-sky-300 transition">
+                    Admin Console
+                  </Link>
+                </li>
+              )}
             </ul>
           </div>
 
@@ -275,13 +336,13 @@ export function Footer() {
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 sm:justify-start">
             <span>© 2026 NextGenSolutions Inc. All rights reserved.</span>
             <span className="hidden sm:inline text-slate-700">•</span>
-            <Link to="/account" className="hover:text-slate-300 transition">
+            <Link to="/support" className="hover:text-slate-300 transition">
               Privacy Policy
             </Link>
-            <Link to="/account" className="hover:text-slate-300 transition">
+            <Link to="/support" className="hover:text-slate-300 transition">
               Terms of Service
             </Link>
-            <Link to="/book-repair" className="hover:text-slate-300 transition">
+            <Link to="/support" className="hover:text-slate-300 transition">
               Warranty Policy
             </Link>
           </div>

@@ -24,6 +24,7 @@ import {
 } from '@/data/productDetails';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { subscribeProducts, type DbProduct } from '@/services/productsService';
 import { cn } from '@/lib/utils';
 
 type DetailTab = 'specs' | 'compatibility' | 'reviews';
@@ -44,6 +45,20 @@ export function ProductDetailPage() {
   const [activeTab, setActiveTab] = useState<DetailTab>('specs');
   const [selectedDockId, setSelectedDockId] = useState(product.docks[0].id);
   const [addedFeedback, setAddedFeedback] = useState(false);
+  const [liveProducts, setLiveProducts] = useState<DbProduct[]>([]);
+
+  useEffect(() => {
+    const unsub = subscribeProducts((rows) => setLiveProducts(rows));
+    return () => unsub();
+  }, []);
+
+  const matchedDbProduct = liveProducts.find(
+    (p) =>
+      p.slug === product.id ||
+      p.id === product.id ||
+      p.sku.toLowerCase() === product.sku.toLowerCase(),
+  );
+  const isInStock = matchedDbProduct ? Number(matchedDbProduct.stock) > 0 : true;
 
   const [reviews, setReviews] = useState<ProductReview[]>(product.reviews);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
@@ -270,10 +285,28 @@ export function ProductDetailPage() {
           <div className="lg:col-span-5">
             <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
               {/* SKU & Rating Row */}
-              <div className="flex items-center justify-between gap-2 text-xs">
-                <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-                  SKU: {product.sku}
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                    SKU: {product.sku}
+                  </span>
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold',
+                      isInStock
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-rose-50 text-rose-700',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'h-1.5 w-1.5 rounded-full',
+                        isInStock ? 'bg-emerald-500' : 'bg-rose-500',
+                      )}
+                    />
+                    <span>{isInStock ? 'In Stock' : 'Out of Stock'}</span>
+                  </span>
+                </div>
                 <a
                   href="#customer-reviews"
                   className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs hover:bg-amber-100/70 transition"
@@ -448,15 +481,20 @@ export function ProductDetailPage() {
 
                 <button
                   type="button"
+                  disabled={!isInStock}
                   onClick={handleAddToCart}
                   className={cn(
-                    'flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold text-white shadow-sm transition cursor-pointer',
-                    addedFeedback
-                      ? 'bg-emerald-600'
-                      : 'bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] shadow-sky-500/20 hover:from-[#0369a1] hover:to-[#0284c7]',
+                    'flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold shadow-sm transition',
+                    !isInStock
+                      ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                      : addedFeedback
+                        ? 'bg-emerald-600 text-white cursor-pointer'
+                        : 'bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] text-white shadow-sky-500/20 hover:from-[#0369a1] hover:to-[#0284c7] cursor-pointer',
                   )}
                 >
-                  {addedFeedback ? (
+                  {!isInStock ? (
+                    <span>Currently Out of Stock</span>
+                  ) : addedFeedback ? (
                     <>
                       <Check className="h-4 w-4" />
                       <span>Added to Cart!</span>

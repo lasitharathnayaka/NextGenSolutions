@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -81,6 +82,32 @@ export function subscribeUserSupportTickets(
       console.error('Failed to subscribe to support tickets:', err);
     },
   );
+}
+
+export interface DbSubscriber {
+  id: string;
+  email: string;
+  created_at?: Timestamp | null;
+}
+
+export async function fetchNewsletterSubscribers(): Promise<DbSubscriber[] | null> {
+  if (!isFirebaseConfigured || !db) return null;
+  try {
+    const snap = await getDocs(collection(db, 'newsletter_subscribers'));
+    const rows = snap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as Omit<DbSubscriber, 'id'>),
+    }));
+    rows.sort((a, b) => {
+      const ta = a.created_at?.toMillis?.() ?? 0;
+      const tb = b.created_at?.toMillis?.() ?? 0;
+      return tb - ta;
+    });
+    return rows;
+  } catch (err) {
+    console.error('Failed to fetch newsletter subscribers:', err);
+    return null;
+  }
 }
 
 export async function subscribeNewsletter(

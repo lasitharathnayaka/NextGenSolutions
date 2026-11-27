@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -47,6 +48,29 @@ export async function fetchProducts(): Promise<DbProduct[] | null> {
     console.error('Failed to fetch products from Firestore:', err);
     return null;
   }
+}
+
+export function subscribeProducts(
+  onUpdate: (products: DbProduct[]) => void,
+): () => void {
+  if (!isFirebaseConfigured || !db) {
+    onUpdate([]);
+    return () => {};
+  }
+  const q = query(collection(db, 'products'));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const rows = snap.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<DbProduct, 'id'>),
+      }));
+      onUpdate(rows);
+    },
+    (err) => {
+      console.error('Failed to subscribe to products:', err);
+    },
+  );
 }
 
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME as

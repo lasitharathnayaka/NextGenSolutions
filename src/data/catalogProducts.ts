@@ -17,6 +17,7 @@ export interface CatalogProduct {
   warranty: string;
   warrantyTone: 'official' | 'seller';
   price: number;
+  inStock?: boolean;
   image: string;
 }
 

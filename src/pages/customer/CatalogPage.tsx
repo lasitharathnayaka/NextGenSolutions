@@ -32,7 +32,7 @@ import {
 import { useCart } from '@/contexts/CartContext';
 import { useFavorites } from '@/contexts/FavoritesContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchProducts, type DbProduct } from '@/services/productsService';
+import { subscribeProducts, type DbProduct } from '@/services/productsService';
 import { cn } from '@/lib/utils';
 
 function mapDbProductToCatalog(p: DbProduct): CatalogProduct {
@@ -69,6 +69,7 @@ function mapDbProductToCatalog(p: DbProduct): CatalogProduct {
     warranty: p.warranty || '1 Yr Official Warranty',
     warrantyTone: p.warranty_tone || 'official',
     price: Number(p.price),
+    inStock: Number(p.stock) > 0,
     image: p.image_urls?.[0] || '/images/dell-xps-15.jpg',
   };
 }
@@ -110,18 +111,26 @@ export function CatalogPage() {
   const [selectedConditions, setSelectedConditions] = useState<ProductCondition[]>([]);
 
   useEffect(() => {
-    fetchProducts().then((rows) => {
-      if (!rows || rows.length === 0) return;
+    const unsub = subscribeProducts((rows) => {
+      if (!rows || rows.length === 0) {
+        setCatalogItems(CATALOG_PRODUCTS);
+        return;
+      }
       const liveMapped = rows
         .filter((r) => r.is_active !== false)
         .map(mapDbProductToCatalog);
       const liveIds = new Set(liveMapped.map((item) => item.id));
+      const liveSkus = new Set(liveMapped.map((item) => item.sku.toLowerCase()));
       const merged = [
         ...liveMapped,
-        ...CATALOG_PRODUCTS.filter((item) => !liveIds.has(item.id)),
+        ...CATALOG_PRODUCTS.filter(
+          (item) =>
+            !liveIds.has(item.id) && !liveSkus.has(item.sku.toLowerCase()),
+        ),
       ];
       setCatalogItems(merged);
     });
+    return () => unsub();
   }, []);
   const [selectedCategories, setSelectedCategories] = useState<ProductCategory[]>(
     initialCategory && CATEGORIES.includes(initialCategory)
@@ -139,6 +148,14 @@ export function CatalogPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [urlQuery]);
+
+  useEffect(() => {
+    if (initialCategory && CATEGORIES.includes(initialCategory)) {
+      setSelectedCategories([initialCategory]);
+      setCurrentPage(1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [initialCategory]);
 
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [compareModalOpen, setCompareModalOpen] = useState(false);
@@ -982,6 +999,7 @@ export function CatalogPage() {
                   const isCompared = compareIds.includes(product.id);
                   const isWishlisted = isFavorite(product.id);
                   const isBrandNew = product.condition === 'Brand New';
+                  const isInStock = product.inStock !== false;
 
                   if (viewMode === 'list') {
                     return (
@@ -1021,8 +1039,26 @@ export function CatalogPage() {
                                 />
                                 <span>{product.conditionLabel}</span>
                               </span>
-                              <span className="text-[10px] font-medium text-slate-400">
-                                SKU: {product.sku}
+                              <span className="inline-flex items-center gap-2">
+                                <span
+                                  className={cn(
+                                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold',
+                                    isInStock
+                                      ? 'bg-emerald-50 text-emerald-700'
+                                      : 'bg-rose-50 text-rose-700',
+                                  )}
+                                >
+                                  <span
+                                    className={cn(
+                                      'h-1.5 w-1.5 rounded-full',
+                                      isInStock ? 'bg-emerald-500' : 'bg-rose-500',
+                                    )}
+                                  />
+                                  <span>{isInStock ? 'In Stock' : 'Out of Stock'}</span>
+                                </span>
+                                <span className="text-[10px] font-medium text-slate-400">
+                                  SKU: {product.sku}
+                                </span>
                               </span>
                             </div>
 
@@ -1082,15 +1118,20 @@ export function CatalogPage() {
                               </button>
                               <button
                                 type="button"
+                                disabled={!isInStock}
                                 onClick={() => handleAddToCart(product)}
                                 className={cn(
-                                  'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold text-white transition cursor-pointer',
-                                  isAdded
-                                    ? 'bg-emerald-600'
-                                    : 'bg-[#0284c7] hover:bg-[#0369a1]',
+                                  'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition',
+                                  !isInStock
+                                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                                    : isAdded
+                                      ? 'bg-emerald-600 text-white cursor-pointer'
+                                      : 'bg-[#0284c7] text-white hover:bg-[#0369a1] cursor-pointer',
                                 )}
                               >
-                                {isAdded ? (
+                                {!isInStock ? (
+                                  <span>Out of Stock</span>
+                                ) : isAdded ? (
                                   <>
                                     <Check className="h-3.5 w-3.5" />
                                     <span>Added</span>
@@ -1172,8 +1213,21 @@ export function CatalogPage() {
                           <span className="font-bold uppercase tracking-wider text-sky-600">
                             {product.brand} · {product.category}
                           </span>
-                          <span className="font-mono text-slate-400">
-                            {product.sku}
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold',
+                              isInStock
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-rose-50 text-rose-700',
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                'h-1.5 w-1.5 rounded-full',
+                                isInStock ? 'bg-emerald-500' : 'bg-rose-500',
+                              )}
+                            />
+                            <span>{isInStock ? 'In Stock' : 'Out of Stock'}</span>
                           </span>
                         </div>
 
@@ -1211,7 +1265,7 @@ export function CatalogPage() {
                             />
                             <span>{product.warranty}</span>
                           </span>
-                          {product.price >= 500 && (
+                          {product.price >= 150000 && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
                               <Truck className="h-3 w-3" />
                               <span>Free Dispatch</span>
@@ -1251,15 +1305,20 @@ export function CatalogPage() {
 
                             <button
                               type="button"
+                              disabled={!isInStock}
                               onClick={() => handleAddToCart(product)}
                               className={cn(
-                                'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[11px] font-bold text-white shadow-xs transition cursor-pointer',
-                                isAdded
-                                  ? 'bg-emerald-600'
-                                  : 'bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] hover:from-[#0369a1] hover:to-[#0284c7]',
+                                'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[11px] font-bold shadow-xs transition',
+                                !isInStock
+                                  ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                                  : isAdded
+                                    ? 'bg-emerald-600 text-white cursor-pointer'
+                                    : 'bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] text-white hover:from-[#0369a1] hover:to-[#0284c7] cursor-pointer',
                               )}
                             >
-                              {isAdded ? (
+                              {!isInStock ? (
+                                <span>Out of Stock</span>
+                              ) : isAdded ? (
                                 <>
                                   <Check className="h-3.5 w-3.5" />
                                   <span>Added</span>
