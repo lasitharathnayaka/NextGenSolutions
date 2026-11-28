@@ -22,8 +22,10 @@ import {
 import {
   buildProductDetailFromDb,
   getProductDetailById,
+  type ProductDetailData,
   type ProductReview,
 } from '@/data/productDetails';
+import { CATALOG_PRODUCTS } from '@/data/catalogProducts';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -73,6 +75,8 @@ export function ProductDetailPage() {
   const [activeTab, setActiveTab] = useState<DetailTab>('specs');
   const [selectedDockId, setSelectedDockId] = useState(product.docks[0].id);
   const [addedFeedback, setAddedFeedback] = useState(false);
+  const [compareModalOpen, setCompareModalOpen] = useState(false);
+  const [compareTargetId, setCompareTargetId] = useState<string>('');
 
   const matchedDbProduct =
     matchedDbByParam ??
@@ -124,7 +128,7 @@ export function ProductDetailPage() {
 
   const activeCondition =
     product.conditions.find((c) => c.id === selectedConditionId) ??
-    product.conditions[1];
+    product.conditions[0];
 
   const activeDock =
     product.docks.find((d) => d.id === selectedDockId) ?? product.docks[0];
@@ -621,8 +625,11 @@ export function ProductDetailPage() {
 
                 <button
                   type="button"
-                  onClick={() => navigate('/catalog')}
-                  className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition cursor-pointer whitespace-nowrap"
+                  onClick={() => {
+                    setCompareTargetId('');
+                    setCompareModalOpen(true);
+                  }}
+                  className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-xs font-semibold text-slate-700 hover:border-sky-300 hover:text-[#0284c7] transition cursor-pointer whitespace-nowrap"
                 >
                   Compare Specs
                 </button>
@@ -948,6 +955,259 @@ export function ProductDetailPage() {
           </div>
         </section>
       </div>
+
+      {/* Side-by-Side Compare Specs Modal */}
+      {compareModalOpen && (() => {
+        const normalizeCompareGroup = (cat: string) => {
+          const lower = cat.toLowerCase();
+          if (lower.includes('ssd') || lower.includes('storage')) return 'ssd';
+          if (lower.includes('ram') || lower.includes('memory')) return 'ram';
+          if (lower.includes('component')) return 'components';
+          return 'systems'; // Laptops & Desktops
+        };
+
+        const currentGroup = normalizeCompareGroup(product.categoryLabel);
+        const isComponentOrStorage =
+          currentGroup === 'ssd' ||
+          currentGroup === 'ram' ||
+          currentGroup === 'components';
+
+        const comparePool: { id: string; label: string; detail: ProductDetailData }[] = [];
+        const seenIds = new Set<string>([product.id]);
+
+        for (const dbItem of liveProducts) {
+          const itemId = dbItem.slug || dbItem.id;
+          if (seenIds.has(itemId)) continue;
+          if (normalizeCompareGroup(dbItem.category) !== currentGroup) continue;
+          seenIds.add(itemId);
+          comparePool.push({
+            id: itemId,
+            label: `${dbItem.name} (${dbItem.sku})`,
+            detail: buildProductDetailFromDb(dbItem),
+          });
+        }
+        for (const catItem of CATALOG_PRODUCTS) {
+          if (seenIds.has(catItem.id)) continue;
+          if (normalizeCompareGroup(catItem.category) !== currentGroup) continue;
+          seenIds.add(catItem.id);
+          comparePool.push({
+            id: catItem.id,
+            label: `${catItem.name} (${catItem.sku})`,
+            detail: getProductDetailById(catItem.id),
+          });
+        }
+
+        const otherEntry =
+          comparePool.find((c) => c.id === compareTargetId) ?? comparePool[0];
+        const other = otherEntry?.detail;
+        const otherCond = other?.conditions[0];
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-xs"
+            onClick={() => setCompareModalOpen(false)}
+          >
+            <div
+              className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between bg-[#0d1726] px-6 py-4 text-white">
+                <div>
+                  <h3 className="text-sm font-bold">
+                    Side-by-Side Hardware Comparison
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Compare specifications, condition, battery health, and price.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCompareModalOpen(false)}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto p-6 text-xs">
+                {/* Product B Selector */}
+                <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    Compare With:
+                  </span>
+                  <select
+                    aria-label="Select product to compare with"
+                    value={otherEntry?.id ?? ''}
+                    onChange={(e) => setCompareTargetId(e.target.value)}
+                    className="w-full sm:w-80 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs font-semibold text-slate-800 focus:border-sky-500 focus:bg-white focus:outline-none cursor-pointer"
+                  >
+                    {comparePool.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {other && otherCond ? (
+                  <div className="overflow-x-auto rounded-xl border border-slate-200/80">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50/80">
+                          <th className="w-36 px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            Attribute
+                          </th>
+                          <th className="px-4 py-3">
+                            <div className="flex items-center gap-2.5">
+                              <img
+                                src={product.gallery[0]?.src}
+                                alt={product.title}
+                                className="h-10 w-10 rounded-lg border border-slate-200 object-cover"
+                              />
+                              <div>
+                                <p className="font-bold text-slate-900">
+                                  {product.title}
+                                </p>
+                                <span className="font-mono text-[10px] text-[#0284c7]">
+                                  {product.sku}
+                                </span>
+                              </div>
+                            </div>
+                          </th>
+                          <th className="px-4 py-3">
+                            <div className="flex items-center gap-2.5">
+                              <img
+                                src={other.gallery[0]?.src}
+                                alt={other.title}
+                                className="h-10 w-10 rounded-lg border border-slate-200 object-cover"
+                              />
+                              <div>
+                                <p className="font-bold text-slate-900">
+                                  {other.title}
+                                </p>
+                                <span className="font-mono text-[10px] text-[#0284c7]">
+                                  {other.sku}
+                                </span>
+                              </div>
+                            </div>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        <tr>
+                          <td className="px-4 py-2.5 font-semibold text-slate-500">
+                            Price
+                          </td>
+                          <td className="px-4 py-2.5 font-extrabold text-[#0284c7]">
+                            Rs.{' '}
+                            {activeCondition.price.toLocaleString('en-US', {
+                              minimumFractionDigits: 2,
+                            })}
+                          </td>
+                          <td className="px-4 py-2.5 font-extrabold text-slate-900">
+                            Rs.{' '}
+                            {otherCond.price.toLocaleString('en-US', {
+                              minimumFractionDigits: 2,
+                            })}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2.5 font-semibold text-slate-500">
+                            Condition
+                          </td>
+                          <td className="px-4 py-2.5 font-semibold text-slate-800">
+                            {activeCondition.title}
+                          </td>
+                          <td className="px-4 py-2.5 font-semibold text-slate-800">
+                            {otherCond.title}
+                          </td>
+                        </tr>
+                        {!isComponentOrStorage && (
+                          <>
+                            <tr>
+                              <td className="px-4 py-2.5 font-semibold text-slate-500">
+                                Battery Health
+                              </td>
+                              <td className="px-4 py-2.5 text-slate-700">
+                                {activeCondition.batteryHealth}
+                              </td>
+                              <td className="px-4 py-2.5 text-slate-700">
+                                {otherCond.batteryHealth}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="px-4 py-2.5 font-semibold text-slate-500">
+                                OS Installation
+                              </td>
+                              <td className="px-4 py-2.5 text-slate-700">
+                                {product.osInstallation}
+                              </td>
+                              <td className="px-4 py-2.5 text-slate-700">
+                                {other.osInstallation}
+                              </td>
+                            </tr>
+                          </>
+                        )}
+                        <tr>
+                          <td className="px-4 py-2.5 font-semibold text-slate-500">
+                            Warranty
+                          </td>
+                          <td className="px-4 py-2.5 text-slate-700">
+                            {activeCondition.warrantyTitle}
+                          </td>
+                          <td className="px-4 py-2.5 text-slate-700">
+                            {otherCond.warrantyTitle}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="px-4 py-2.5 font-semibold text-slate-500">
+                            Key Specs
+                          </td>
+                          <td className="px-4 py-2.5 text-slate-600">
+                            {product.specs
+                              .map((s) => `${s.label}: ${s.value}`)
+                              .slice(0, 4)
+                              .join(' · ')}
+                          </td>
+                          <td className="px-4 py-2.5 text-slate-600">
+                            {other.specs
+                              .map((s) => `${s.label}: ${s.value}`)
+                              .slice(0, 4)
+                              .join(' · ')}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="py-8 text-center text-slate-400">
+                    No other {product.categoryLabel} products available to compare yet.
+                  </p>
+                )}
+
+                <div className="mt-5 flex justify-end gap-2.5">
+                  {other && (
+                    <Link
+                      to={`/product/${other.id}`}
+                      onClick={() => setCompareModalOpen(false)}
+                      className="rounded-xl border border-slate-200 px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      View {other.breadcrumbName}
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setCompareModalOpen(false)}
+                    className="rounded-xl bg-[#0284c7] px-5 py-2 font-bold text-white hover:bg-[#0369a1] cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Write a Review Modal */}
       {reviewModalOpen && (

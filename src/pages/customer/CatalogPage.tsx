@@ -1085,7 +1085,7 @@ export function CatalogPage() {
 
                           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
                             <div className="flex items-center gap-4">
-                              <p className="text-lg font-extrabold text-slate-900">
+                              <p className="text-sm font-extrabold text-slate-900 whitespace-nowrap">
                                 Rs.{' '}
                                 {product.price.toLocaleString('en-US', {
                                   minimumFractionDigits: 2,
@@ -1209,10 +1209,10 @@ export function CatalogPage() {
 
                       {/* Card Body */}
                       <div className="flex flex-1 flex-col p-4">
-                        {/* Brand + SKU + Stock Status */}
+                        {/* Product ID + Stock Status */}
                         <div className="flex items-center justify-between gap-2 text-[10px]">
-                          <span className="font-bold uppercase tracking-wider text-sky-600">
-                            {product.brand} · {product.category}
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-600">
+                            {product.sku}
                           </span>
                           <span
                             className={cn(
@@ -1276,11 +1276,11 @@ export function CatalogPage() {
 
                         {/* Bottom Price & Action Bar */}
                         <div className="mt-auto flex items-end justify-between gap-2 border-t border-slate-100 pt-3.5 mt-4">
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
                               Enterprise Price
                             </p>
-                            <p className="text-lg font-extrabold leading-tight text-slate-900">
+                            <p className="text-[13px] font-extrabold leading-tight text-slate-900 whitespace-nowrap">
                               Rs.{' '}
                               {product.price.toLocaleString('en-US', {
                                 minimumFractionDigits: 2,
@@ -1289,13 +1289,13 @@ export function CatalogPage() {
                             </p>
                           </div>
 
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex shrink-0 items-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => toggleCompare(product.id)}
                               title="Compare device"
                               className={cn(
-                                'rounded-lg border px-2.5 py-2 text-[11px] font-semibold transition cursor-pointer',
+                                'rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition cursor-pointer',
                                 isCompared
                                   ? 'border-[#0284c7] bg-sky-50 text-[#0284c7]'
                                   : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900',
@@ -1309,7 +1309,7 @@ export function CatalogPage() {
                               disabled={!isInStock}
                               onClick={() => handleAddToCart(product)}
                               className={cn(
-                                'inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[11px] font-bold shadow-xs transition',
+                                'inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold shadow-xs transition',
                                 !isInStock
                                   ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
                                   : isAdded

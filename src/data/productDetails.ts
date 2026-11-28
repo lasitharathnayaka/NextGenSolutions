@@ -346,16 +346,6 @@ export function buildProductDetailFromDb(dbItem: DbProduct): ProductDetailData {
   const isNew = dbItem.condition === 'Brand New';
   const isGradeB = dbItem.condition === 'Used - Grade B';
 
-  const brandNewPrice = isNew
-    ? basePrice
-    : Math.round(basePrice * (isGradeB ? 1.45 : 1.25));
-  const gradeAPrice = isNew
-    ? Math.round(basePrice * 0.82)
-    : isGradeB
-      ? Math.round(basePrice * 1.15)
-      : basePrice;
-  const gradeBPrice = isGradeB ? basePrice : Math.round(gradeAPrice * 0.84);
-
   const primaryImg = dbItem.image_urls?.[0] || '/images/dell-xps-15.jpg';
   const galleryImages =
     dbItem.image_urls && dbItem.image_urls.length > 0
@@ -372,6 +362,51 @@ export function buildProductDetailFromDb(dbItem: DbProduct): ProductDetailData {
     });
   }
 
+  const customBattery = dbItem.battery_health?.trim();
+
+  const activeTier: ConditionTier = isNew
+    ? {
+        id: 'brand-new',
+        title: 'Brand New',
+        subtitle: 'Original factory sealed box',
+        price: basePrice,
+        photoBadge: customBattery
+          ? `Brand New · ${customBattery}`
+          : 'Brand New · Factory Sealed',
+        batteryHealth: customBattery || '100% Factory New',
+        cosmeticGrade: 'Brand New (Factory Sealed Box)',
+        warrantyTitle: `${dbItem.warranty || '1 Yr Warranty'} Included`,
+        warrantySubtitle: 'Official hardware warranty coverage included',
+      }
+    : isGradeB
+      ? {
+          id: 'grade-b',
+          title: 'Used - Grade B',
+          subtitle: 'Minor cosmetic wear, fully functional',
+          price: basePrice,
+          photoBadge: customBattery
+            ? `Used - Grade B · ${customBattery}`
+            : 'Used - Grade B · 84% Battery Health',
+          batteryHealth: customBattery || '84% Original Capacity',
+          cosmeticGrade: 'Grade B (Light cosmetic wear, 100% functional)',
+          warrantyTitle: `${dbItem.warranty || '3-Month NextGenSolution Hardware Warranty'} Included`,
+          warrantySubtitle: '100% functional bench-tested unit',
+        }
+      : {
+          id: 'grade-a',
+          title: 'Used - Grade A Certified',
+          subtitle: 'Thoroughly tested & fully restored',
+          badgeTag: 'Best Value',
+          price: basePrice,
+          photoBadge: customBattery
+            ? `Used - Grade A Certified · ${customBattery}`
+            : 'Used - Grade A Certified · 95% Battery Health',
+          batteryHealth: customBattery || '95% Original Capacity',
+          cosmeticGrade: 'Grade A (Minimal micro-scratches on chassis)',
+          warrantyTitle: `${dbItem.warranty || '6-Month NextGenSolution Hardware Warranty'} Included`,
+          warrantySubtitle: '40-Point lab tested and verified',
+        };
+
   return {
     id: dbItem.slug || dbItem.id,
     sku: dbItem.sku,
@@ -384,48 +419,14 @@ export function buildProductDetailFromDb(dbItem: DbProduct): ProductDetailData {
     rating: 4.8,
     reviewCount: 12,
     gallery: galleryImages.slice(0, 4),
-    defaultConditionId: isNew ? 'brand-new' : isGradeB ? 'grade-b' : 'grade-a',
-    conditions: [
-      {
-        id: 'brand-new',
-        title: 'Brand New',
-        subtitle: 'Original factory sealed box',
-        price: brandNewPrice,
-        photoBadge: 'Brand New · Factory Sealed',
-        batteryHealth: '100% Factory New',
-        cosmeticGrade: 'Brand New (Factory Sealed Box)',
-        warrantyTitle: `${dbItem.warranty || '1 Yr Warranty'} Included`,
-        warrantySubtitle: 'Official hardware warranty coverage included',
-      },
-      {
-        id: 'grade-a',
-        title: 'Used - Grade A Certified',
-        subtitle: 'Thoroughly tested & fully restored',
-        badgeTag: 'Best Value',
-        price: gradeAPrice,
-        photoBadge: 'Used - Grade A Certified · 95% Battery Health',
-        batteryHealth: '95% Original Capacity',
-        cosmeticGrade: 'Grade A (Minimal micro-scratches on chassis)',
-        warrantyTitle: '6-Month NextGenSolution Hardware Warranty Included',
-        warrantySubtitle: '40-Point lab tested and verified',
-      },
-      {
-        id: 'grade-b',
-        title: 'Used - Grade B',
-        subtitle: 'Minor cosmetic wear, fully functional',
-        price: gradeBPrice,
-        photoBadge: 'Used - Grade B · 84% Battery Health',
-        batteryHealth: '84% Original Capacity',
-        cosmeticGrade: 'Grade B (Light cosmetic wear, 100% functional)',
-        warrantyTitle: '3-Month NextGenSolution Hardware Warranty Included',
-        warrantySubtitle: '100% functional bench-tested unit',
-      },
-    ],
+    defaultConditionId: activeTier.id,
+    conditions: [activeTier],
     thermalStatus: 'Passed 100%',
     osInstallation:
-      dbItem.category === 'RAM' || dbItem.category === 'SSD / Storage'
+      dbItem.os_installation?.trim() ||
+      (dbItem.category === 'RAM' || dbItem.category === 'SSD / Storage'
         ? 'Diagnostic Burn-In Verified'
-        : 'Clean Windows 11 Pro Install',
+        : 'Windows 11 Pro (Licensed)'),
     specs: [
       { label: 'Product ID', value: dbItem.sku },
       { label: 'Brand', value: dbItem.brand || 'NextGen' },

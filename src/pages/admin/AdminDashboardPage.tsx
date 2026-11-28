@@ -83,6 +83,8 @@ interface AdminInventoryItem {
   stock: number;
   price: number;
   warranty: string;
+  batteryHealth?: string;
+  osInstallation?: string;
   image: string;
 }
 
@@ -658,6 +660,8 @@ export function AdminDashboardPage() {
             stock: r.stock,
             price: Number(r.price),
             warranty: r.warranty,
+            batteryHealth: r.battery_health ?? undefined,
+            osInstallation: r.os_installation ?? undefined,
             image: r.image_urls[0] ?? '/images/dell-xps-15.jpg',
           })),
         );
@@ -762,6 +766,11 @@ export function AdminDashboardPage() {
   const [formStock, setFormStock] = useState('10');
   const [formPrice, setFormPrice] = useState('999');
   const [formWarranty, setFormWarranty] = useState('1 Yr Warranty');
+  const [formBatteryHealth, setFormBatteryHealth] =
+    useState('100% Factory New');
+  const [formOsInstallation, setFormOsInstallation] = useState(
+    'Windows 11 Pro (Licensed)',
+  );
   const [formImages, setFormImages] = useState<string[]>(['/images/dell-xps-15.jpg']);
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -943,6 +952,8 @@ export function AdminDashboardPage() {
     setFormStock('10');
     setFormPrice('150000');
     setFormWarranty('1 Yr Warranty');
+    setFormBatteryHealth('100% Factory New');
+    setFormOsInstallation('Windows 11 Pro (Licensed)');
     setFormImages(['/images/dell-xps-15.jpg']);
     setImageUrlInput('');
     setProductModalOpen(true);
@@ -959,6 +970,22 @@ export function AdminDashboardPage() {
     setFormStock(String(item.stock));
     setFormPrice(String(item.price));
     setFormWarranty(item.warranty);
+    setFormBatteryHealth(
+      item.batteryHealth ||
+        (item.category !== 'Laptops'
+          ? 'N/A (Desktop / Component)'
+          : item.condition === 'Brand New'
+            ? '100% Factory New'
+            : item.condition === 'Used - Grade A'
+              ? '95%+ Original Capacity'
+              : '85% Original Capacity'),
+    );
+    setFormOsInstallation(
+      item.osInstallation ||
+        (item.category === 'Storage' || item.category === 'Components'
+          ? 'N/A (Component / Storage)'
+          : 'Windows 11 Pro (Licensed)'),
+    );
     setFormImages([item.image]);
     setImageUrlInput('');
     setProductModalOpen(true);
@@ -1022,6 +1049,8 @@ export function AdminDashboardPage() {
       stock: Math.max(0, Number(formStock) || 0),
       price: Math.max(0, Number(formPrice) || 0),
       warranty: formWarranty.trim() || '1 Yr Warranty',
+      batteryHealth: formBatteryHealth,
+      osInstallation: formOsInstallation,
       image: formImages[0] ?? '/images/dell-xps-15.jpg',
     };
 
@@ -1045,6 +1074,8 @@ export function AdminDashboardPage() {
         stock: payload.stock,
         warranty: payload.warranty,
         warranty_tone: payload.condition === 'Brand New' ? 'official' : 'seller',
+        battery_health: payload.batteryHealth ?? null,
+        os_installation: payload.osInstallation ?? null,
         specs: payload.subtitle.split(',').map((s) => s.trim()).filter(Boolean),
         image_urls: formImages.length > 0 ? formImages : [payload.image],
         is_featured: false,
@@ -3835,7 +3866,7 @@ export function AdminDashboardPage() {
                       />
                     </div>
 
-                    <div className="sm:col-span-2">
+                    <div>
                       <label className="block font-semibold text-slate-700">
                         Warranty Coverage
                       </label>
@@ -3845,6 +3876,64 @@ export function AdminDashboardPage() {
                         onChange={(e) => setFormWarranty(e.target.value)}
                         className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700">
+                        Battery Health
+                      </label>
+                      <select
+                        aria-label="Battery Health"
+                        value={formBatteryHealth}
+                        onChange={(e) => setFormBatteryHealth(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none cursor-pointer"
+                      >
+                        <option value="100% Factory New">100% Factory New</option>
+                        <option value="95%+ Original Capacity">
+                          95%+ Original Capacity
+                        </option>
+                        <option value="90% Original Capacity">
+                          90% Original Capacity
+                        </option>
+                        <option value="85% Original Capacity">
+                          85% Original Capacity
+                        </option>
+                        <option value="80% Original Capacity">
+                          80% Original Capacity
+                        </option>
+                        <option value="75% Original Capacity">
+                          75% Original Capacity
+                        </option>
+                        <option value="N/A (Desktop / Component)">
+                          N/A (Desktop / Component)
+                        </option>
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block font-semibold text-slate-700">
+                        OS Installation
+                      </label>
+                      <select
+                        aria-label="OS Installation"
+                        value={formOsInstallation}
+                        onChange={(e) => setFormOsInstallation(e.target.value)}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none cursor-pointer"
+                      >
+                        <option value="Windows 11 Pro (Licensed)">
+                          Windows 11 Pro (Licensed)
+                        </option>
+                        <option value="Windows 11 Home">Windows 11 Home</option>
+                        <option value="Windows 10 Pro">Windows 10 Pro</option>
+                        <option value="macOS (Latest Official)">
+                          macOS (Latest Official)
+                        </option>
+                        <option value="Ubuntu Linux">Ubuntu Linux</option>
+                        <option value="DOS / No OS">DOS / No OS</option>
+                        <option value="N/A (Component / Storage)">
+                          N/A (Component / Storage)
+                        </option>
+                      </select>
                     </div>
                   </div>
                 </div>
