@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ChevronRight,
@@ -20,6 +20,14 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { submitSupportTicket } from '@/services/supportService';
+import {
+  subscribeUserOrders,
+  type DbOrderRecord,
+} from '@/services/ordersService';
+import {
+  subscribeUserRepairs,
+  type DbRepairBooking,
+} from '@/services/repairsService';
 
 type FaqCategory =
   | 'All'
@@ -98,6 +106,9 @@ export function SupportPage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [referenceId, setReferenceId] = useState('');
+  const [customReferenceMode, setCustomReferenceMode] = useState(false);
+  const [userOrders, setUserOrders] = useState<DbOrderRecord[]>([]);
+  const [userRepairs, setUserRepairs] = useState<DbRepairBooking[]>([]);
   const [topic, setTopic] = useState('Hardware Warranty & RMA');
   const [message, setMessage] = useState('');
   const [submittedTicketId, setSubmittedTicketId] = useState<string | null>(null);
@@ -107,6 +118,54 @@ export function SupportPage() {
   const adminWhatsApp = (
     import.meta.env.VITE_ADMIN_WHATSAPP || '94760336703'
   ).replace(/[^\d]/g, '');
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setUserOrders([]);
+      setUserRepairs([]);
+      return;
+    }
+    const unsubOrders = subscribeUserOrders(user.uid, (rows) => {
+      setUserOrders(rows);
+    });
+    const unsubRepairs = subscribeUserRepairs(user.uid, (rows) => {
+      setUserRepairs(rows);
+    });
+    return () => {
+      unsubOrders();
+      unsubRepairs();
+    };
+  }, [user?.uid]);
+
+  const referenceOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [];
+    for (const order of userOrders) {
+      const pids = (order.order_items ?? [])
+        .map((i) => i.product_id)
+        .filter((pid): pid is string => Boolean(pid));
+      const firstItem = order.order_items?.[0]?.item_name || 'Hardware Order';
+      const pidTag = pids.length > 0 ? ` [${pids.join(', ')}]` : '';
+      opts.push({
+        value: `${order.order_number}${pidTag}`,
+        label: `Order #${order.order_number}${pidTag} — ${firstItem}`,
+      });
+    }
+    for (const repair of userRepairs) {
+      const displayId = repair.ticket_number.replace(/^NGS-REP-/i, 'NGS-ORD-');
+      opts.push({
+        value: displayId,
+        label: `Repair #${displayId} — ${repair.brand_model}`,
+      });
+    }
+    return opts;
+  }, [userOrders, userRepairs]);
+
+  // Automatically pre-select the customer's latest Order / Product ID
+  useEffect(() => {
+    if (!customReferenceMode && !referenceId && referenceOptions.length > 0) {
+      setReferenceId(referenceOptions[0].value);
+    }
+  }, [referenceOptions, customReferenceMode, referenceId]);
 
   // Live Chat Modal State
   const [chatOpen, setChatOpen] = useState(false);
@@ -531,16 +590,62 @@ export function SupportPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block font-semibold text-slate-700">
-                      Order / Product ID
-                    </label>
-                    <input
-                      type="text"
-                      value={referenceId}
-                      onChange={(e) => setReferenceId(e.target.value)}
-                      placeholder="e.g. NGS-ORD-7513"
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
-                    />
+                    <div className="flex items-center justify-between">
+                      <label className="block font-semibold text-slate-700">
+                        Order / Product ID
+                      </label>
+                      {referenceOptions.length > 0 && !customReferenceMode && (
+                        <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-[#0284c7]">
+                          Auto-detected
+                        </span>
+                      )}
+                    </div>
+                    {referenceOptions.length > 0 && !customReferenceMode ? (
+                      <select
+                        aria-label="Select your Order or Product ID"
+                        value={referenceId}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') {
+                            setCustomReferenceMode(true);
+                            setReferenceId('');
+                          } else {
+                            setReferenceId(e.target.value);
+                          }
+                        }}
+                        className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 font-mono text-[11px] text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none cursor-pointer"
+                      >
+                        {referenceOptions.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                        <option value="__custom__">
+                          Other / Enter ID manually...
+                        </option>
+                      </select>
+                    ) : (
+                      <div className="mt-1 space-y-1">
+                        <input
+                          type="text"
+                          value={referenceId}
+                          onChange={(e) => setReferenceId(e.target.value)}
+                          placeholder="e.g. NGS-ORD-7513"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                        />
+                        {referenceOptions.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomReferenceMode(false);
+                              setReferenceId(referenceOptions[0].value);
+                            }}
+                            className="text-[10px] font-semibold text-[#0284c7] hover:underline cursor-pointer"
+                          >
+                            ← Pick from my orders
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
