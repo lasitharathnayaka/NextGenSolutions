@@ -20,6 +20,7 @@ import {
   ImagePlus,
 } from 'lucide-react';
 import {
+  buildProductDetailFromDb,
   getProductDetailById,
   type ProductReview,
 } from '@/data/productDetails';
@@ -44,7 +45,25 @@ export function ProductDetailPage() {
   const { addToCart } = useCart();
   const { user } = useAuth();
 
-  const product = getProductDetailById(id);
+  const [liveProducts, setLiveProducts] = useState<DbProduct[]>([]);
+
+  useEffect(() => {
+    const unsub = subscribeProducts((rows) => setLiveProducts(rows));
+    return () => unsub();
+  }, []);
+
+  const matchedDbByParam = id
+    ? liveProducts.find(
+        (p) =>
+          p.slug === id ||
+          p.id === id ||
+          p.sku.toLowerCase() === id.toLowerCase(),
+      )
+    : undefined;
+
+  const product = matchedDbByParam
+    ? buildProductDetailFromDb(matchedDbByParam)
+    : getProductDetailById(id);
 
   const [selectedImageIdx, setSelectedImageIdx] = useState(0);
   const [selectedConditionId, setSelectedConditionId] = useState(
@@ -54,19 +73,15 @@ export function ProductDetailPage() {
   const [activeTab, setActiveTab] = useState<DetailTab>('specs');
   const [selectedDockId, setSelectedDockId] = useState(product.docks[0].id);
   const [addedFeedback, setAddedFeedback] = useState(false);
-  const [liveProducts, setLiveProducts] = useState<DbProduct[]>([]);
 
-  useEffect(() => {
-    const unsub = subscribeProducts((rows) => setLiveProducts(rows));
-    return () => unsub();
-  }, []);
-
-  const matchedDbProduct = liveProducts.find(
-    (p) =>
-      p.slug === product.id ||
-      p.id === product.id ||
-      p.sku.toLowerCase() === product.sku.toLowerCase(),
-  );
+  const matchedDbProduct =
+    matchedDbByParam ??
+    liveProducts.find(
+      (p) =>
+        p.slug === product.id ||
+        p.id === product.id ||
+        p.sku.toLowerCase() === product.sku.toLowerCase(),
+    );
   const isInStock = matchedDbProduct ? Number(matchedDbProduct.stock) > 0 : true;
 
   const [reviews, setReviews] = useState<ProductReview[]>(product.reviews);
@@ -136,7 +151,7 @@ export function ProductDetailPage() {
       });
     }
     setAddedFeedback(true);
-    window.setTimeout(() => setAddedFeedback(false), 1400);
+    navigate('/cart');
   };
 
   const handleTabClick = (tab: DetailTab) => {

@@ -1,5 +1,6 @@
 import { CATALOG_PRODUCTS } from '@/data/catalogProducts';
 import { FEATURED_DEALS } from '@/data/featuredProducts';
+import type { DbProduct } from '@/services/productsService';
 
 export interface ConditionTier {
   id: 'brand-new' | 'grade-a' | 'grade-b';
@@ -289,7 +290,7 @@ export function getProductDetailById(id?: string): ProductDetailData {
         { label: 'Brand', value: catalogMatch.brand },
         { label: 'Category', value: catalogMatch.category },
         { label: 'Key Configuration', value: catalogMatch.specs.join(' · ') },
-        { label: 'SKU Reference', value: catalogMatch.sku },
+        { label: 'Product ID', value: catalogMatch.sku },
         { label: 'Inspection Standard', value: 'NextGen 40-Point Hardware Diagnostics' },
         { label: 'Warranty Coverage', value: catalogMatch.warranty },
       ],
@@ -304,7 +305,7 @@ export function getProductDetailById(id?: string): ProductDetailData {
     return {
       ...DELL_LATITUDE_DETAIL,
       id: featuredMatch.id,
-      sku: `NGS-${featuredMatch.id.slice(0, 4).toUpperCase()}`,
+      sku: featuredMatch.sku,
       breadcrumbName: featuredMatch.name,
       title: featuredMatch.name,
       gallery: [
@@ -338,4 +339,108 @@ export function getProductDetailById(id?: string): ProductDetailData {
   }
 
   return DELL_LATITUDE_DETAIL;
+}
+
+export function buildProductDetailFromDb(dbItem: DbProduct): ProductDetailData {
+  const basePrice = Number(dbItem.price) || 0;
+  const isNew = dbItem.condition === 'Brand New';
+  const isGradeB = dbItem.condition === 'Used - Grade B';
+
+  const brandNewPrice = isNew
+    ? basePrice
+    : Math.round(basePrice * (isGradeB ? 1.45 : 1.25));
+  const gradeAPrice = isNew
+    ? Math.round(basePrice * 0.82)
+    : isGradeB
+      ? Math.round(basePrice * 1.15)
+      : basePrice;
+  const gradeBPrice = isGradeB ? basePrice : Math.round(gradeAPrice * 0.84);
+
+  const primaryImg = dbItem.image_urls?.[0] || '/images/dell-xps-15.jpg';
+  const galleryImages =
+    dbItem.image_urls && dbItem.image_urls.length > 0
+      ? dbItem.image_urls.map((src, idx) => ({
+          src,
+          alt: `${dbItem.name} view ${idx + 1}`,
+        }))
+      : [{ src: primaryImg, alt: dbItem.name }];
+
+  while (galleryImages.length < 4) {
+    galleryImages.push({
+      src: primaryImg,
+      alt: `${dbItem.name} detail ${galleryImages.length + 1}`,
+    });
+  }
+
+  return {
+    id: dbItem.slug || dbItem.id,
+    sku: dbItem.sku,
+    categoryLabel:
+      dbItem.category === 'Laptops' || dbItem.category === 'Desktops'
+        ? 'Laptops & Desktops'
+        : dbItem.category,
+    breadcrumbName: dbItem.name,
+    title: dbItem.name,
+    rating: 4.8,
+    reviewCount: 12,
+    gallery: galleryImages.slice(0, 4),
+    defaultConditionId: isNew ? 'brand-new' : isGradeB ? 'grade-b' : 'grade-a',
+    conditions: [
+      {
+        id: 'brand-new',
+        title: 'Brand New',
+        subtitle: 'Original factory sealed box',
+        price: brandNewPrice,
+        photoBadge: 'Brand New · Factory Sealed',
+        batteryHealth: '100% Factory New',
+        cosmeticGrade: 'Brand New (Factory Sealed Box)',
+        warrantyTitle: `${dbItem.warranty || '1 Yr Warranty'} Included`,
+        warrantySubtitle: 'Official hardware warranty coverage included',
+      },
+      {
+        id: 'grade-a',
+        title: 'Used - Grade A Certified',
+        subtitle: 'Thoroughly tested & fully restored',
+        badgeTag: 'Best Value',
+        price: gradeAPrice,
+        photoBadge: 'Used - Grade A Certified · 95% Battery Health',
+        batteryHealth: '95% Original Capacity',
+        cosmeticGrade: 'Grade A (Minimal micro-scratches on chassis)',
+        warrantyTitle: '6-Month NextGenSolution Hardware Warranty Included',
+        warrantySubtitle: '40-Point lab tested and verified',
+      },
+      {
+        id: 'grade-b',
+        title: 'Used - Grade B',
+        subtitle: 'Minor cosmetic wear, fully functional',
+        price: gradeBPrice,
+        photoBadge: 'Used - Grade B · 84% Battery Health',
+        batteryHealth: '84% Original Capacity',
+        cosmeticGrade: 'Grade B (Light cosmetic wear, 100% functional)',
+        warrantyTitle: '3-Month NextGenSolution Hardware Warranty Included',
+        warrantySubtitle: '100% functional bench-tested unit',
+      },
+    ],
+    thermalStatus: 'Passed 100%',
+    osInstallation:
+      dbItem.category === 'RAM' || dbItem.category === 'SSD / Storage'
+        ? 'Diagnostic Burn-In Verified'
+        : 'Clean Windows 11 Pro Install',
+    specs: [
+      { label: 'Product ID', value: dbItem.sku },
+      { label: 'Brand', value: dbItem.brand || 'NextGen' },
+      { label: 'Category', value: dbItem.category },
+      ...(dbItem.subtitle
+        ? [{ label: 'Key Specifications', value: dbItem.subtitle }]
+        : dbItem.specs?.length
+          ? [{ label: 'Key Specifications', value: dbItem.specs.join(' · ') }]
+          : []),
+      ...(dbItem.serial_number
+        ? [{ label: 'Serial Reference', value: dbItem.serial_number }]
+        : []),
+      { label: 'Warranty Coverage', value: dbItem.warranty || '1 Yr Warranty' },
+    ],
+    docks: DEFAULT_DOCK_OPTIONS,
+    reviews: DEFAULT_REVIEWS,
+  };
 }
