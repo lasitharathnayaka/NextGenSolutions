@@ -292,7 +292,10 @@ export function SoftwarePage() {
     };
     addToCart({
       id: license.id,
-      sku: swSkuMap[license.id] || `NGS-SW-${license.id.slice(0, 4).toUpperCase()}`,
+      sku:
+        license.sku ||
+        swSkuMap[license.id] ||
+        `NGS-SW-${license.id.slice(0, 4).toUpperCase()}`,
       name: license.name,
       price: license.price,
       image: '/images/cybercraft-studio.jpg',
@@ -303,16 +306,35 @@ export function SoftwarePage() {
     }, 1200);
   };
 
+  const adminWhatsApp = (
+    (import.meta.env.VITE_ADMIN_WHATSAPP as string | undefined) || '94760336703'
+  ).replace(/\D/g, '');
+
   const handleChatSubmit = (e: FormEvent) => {
     e.preventDefault();
     const trimmed = chatInput.trim();
     if (!trimmed) return;
+
+    const waMessage = [
+      `*Software Activation Support — NextGenSolution*`,
+      ...(user?.displayName ? [`Customer: ${user.displayName}`] : []),
+      ...(user?.email ? [`Email: ${user.email}`] : []),
+      ``,
+      `Question:`,
+      trimmed,
+    ].join('\n');
+    const waUrl = `https://wa.me/${adminWhatsApp}?text=${encodeURIComponent(
+      waMessage,
+    )}`;
+
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+
     setChatMessages((prev) => [
       ...prev,
       { sender: 'user', text: trimmed },
       {
         sender: 'engineer',
-        text: 'Thanks! Your activation request has been prioritized. A live technician will reply here in under 2 minutes.',
+        text: 'Opening WhatsApp directly with our NextGenSolution activation engineer (+94 76 033 6703) with your message pre-filled!',
       },
     ]);
     setChatInput('');

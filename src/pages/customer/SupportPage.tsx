@@ -243,12 +243,27 @@ export function SupportPage() {
     e.preventDefault();
     const trimmed = chatInput.trim();
     if (!trimmed) return;
+
+    const waMessage = [
+      `*Live Engineer Chat — NextGenSolution*`,
+      ...(user?.displayName ? [`Customer: ${user.displayName}`] : []),
+      ...(user?.email ? [`Email: ${user.email}`] : []),
+      ``,
+      `Question:`,
+      trimmed,
+    ].join('\n');
+    const waUrl = `https://wa.me/${adminWhatsApp}?text=${encodeURIComponent(
+      waMessage,
+    )}`;
+
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+
     setChatMessages((prev) => [
       ...prev,
       { sender: 'user', text: trimmed },
       {
         sender: 'engineer',
-        text: 'Got it! An engineer from our Piliyandala diagnostics desk is reviewing your request and will respond here shortly.',
+        text: 'Opening WhatsApp directly with our NextGenSolution engineer (+94 76 033 6703) with your question pre-filled!',
       },
     ]);
     setChatInput('');
