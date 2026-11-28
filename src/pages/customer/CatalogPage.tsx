@@ -32,6 +32,7 @@ import {
 import { useCart } from '@/contexts/CartContext';
 import { useFavorites } from '@/contexts/FavoritesContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { isFirebaseConfigured } from '@/lib/firebase';
 import { subscribeProducts, type DbProduct } from '@/services/productsService';
 import { cn } from '@/lib/utils';
 
@@ -107,28 +108,23 @@ export function CatalogPage() {
   const urlQuery = searchParams.get('q') ?? '';
   const initialCategory = searchParams.get('category') as ProductCategory | null;
 
-  const [catalogItems, setCatalogItems] = useState<CatalogProduct[]>(CATALOG_PRODUCTS);
+  const [catalogItems, setCatalogItems] = useState<CatalogProduct[]>(
+    isFirebaseConfigured ? [] : CATALOG_PRODUCTS,
+  );
   const [selectedConditions, setSelectedConditions] = useState<ProductCondition[]>([]);
 
   useEffect(() => {
     const unsub = subscribeProducts((rows) => {
-      if (!rows || rows.length === 0) {
-        setCatalogItems(CATALOG_PRODUCTS);
-        return;
+      if (!isFirebaseConfigured) {
+        if (!rows || rows.length === 0) {
+          setCatalogItems(CATALOG_PRODUCTS);
+          return;
+        }
       }
-      const liveMapped = rows
+      const liveMapped = (rows ?? [])
         .filter((r) => r.is_active !== false)
         .map(mapDbProductToCatalog);
-      const liveIds = new Set(liveMapped.map((item) => item.id));
-      const liveSkus = new Set(liveMapped.map((item) => item.sku.toLowerCase()));
-      const merged = [
-        ...liveMapped,
-        ...CATALOG_PRODUCTS.filter(
-          (item) =>
-            !liveIds.has(item.id) && !liveSkus.has(item.sku.toLowerCase()),
-        ),
-      ];
-      setCatalogItems(merged);
+      setCatalogItems(liveMapped);
     });
     return () => unsub();
   }, []);
@@ -139,8 +135,18 @@ export function CatalogPage() {
   );
   const [selectedBrands, setSelectedBrands] = useState<ProductBrand[]>([]);
   const [selectedRam, setSelectedRam] = useState<RamCapacity | null>(null);
-  const [maxPrice, setMaxPrice] = useState<number>(MAX_PRICE);
+  const [maxPrice, setMaxPrice] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('condition');
+
+  const catalogMaxPrice = useMemo(() => {
+    const highest = catalogItems.reduce(
+      (max, item) => Math.max(max, item.price),
+      MAX_PRICE,
+    );
+    return Math.ceil(highest / 50000) * 50000;
+  }, [catalogItems]);
+
+  const effectiveMaxPrice = maxPrice ?? catalogMaxPrice;
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -221,7 +227,7 @@ export function CatalogPage() {
     setSelectedCategories([]);
     setSelectedBrands([]);
     setSelectedRam(null);
-    setMaxPrice(MAX_PRICE);
+    setMaxPrice(null);
     setCurrentPage(1);
     if (urlQuery || initialCategory) {
       setSearchParams({});
@@ -260,7 +266,7 @@ export function CatalogPage() {
       if (selectedRam && item.ramCapacity !== selectedRam) {
         return false;
       }
-      if (item.price > maxPrice) {
+      if (maxPrice !== null && item.price > maxPrice) {
         return false;
       }
       if (query) {
@@ -298,7 +304,7 @@ export function CatalogPage() {
           selectedCategories.length > 0 ||
           selectedBrands.length > 0 ||
           selectedRam !== null ||
-          maxPrice < MAX_PRICE ||
+          (maxPrice !== null && maxPrice < catalogMaxPrice) ||
           query.length > 0
         ) {
           sorted.sort((a, b) => a.conditionRank - b.conditionRank);
@@ -369,12 +375,12 @@ export function CatalogPage() {
       }),
     );
 
-    if (maxPrice < MAX_PRICE) {
+    if (maxPrice !== null && maxPrice < catalogMaxPrice) {
       chips.push({
         key: 'price',
         label: `Up to Rs. ${maxPrice.toLocaleString()}`,
         onRemove: () => {
-          setMaxPrice(MAX_PRICE);
+          setMaxPrice(null);
           setCurrentPage(1);
         },
       });
@@ -451,7 +457,13 @@ export function CatalogPage() {
     [catalogItems, compareIds],
   );
 
-  const pricePercent = ((maxPrice - MIN_PRICE) / (MAX_PRICE - MIN_PRICE)) * 100;
+  const pricePercent = Math.min(
+    100,
+    Math.max(
+      0,
+      ((effectiveMaxPrice - MIN_PRICE) / (catalogMaxPrice - MIN_PRICE)) * 100,
+    ),
+  );
 
   const categoryIcon = (cat: ProductCategory) => {
     switch (cat) {
@@ -620,7 +632,7 @@ export function CatalogPage() {
               Max Budget
             </span>
             <span className="rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-[#0284c7]">
-              Up to Rs. {maxPrice.toLocaleString()}
+              Up to Rs. {effectiveMaxPrice.toLocaleString()}
             </span>
           </button>
 
@@ -629,11 +641,12 @@ export function CatalogPage() {
               <input
                 type="range"
                 min={MIN_PRICE}
-                max={MAX_PRICE}
+                max={catalogMaxPrice}
                 step={5000}
-                value={maxPrice}
+                value={effectiveMaxPrice}
                 onChange={(e) => {
-                  setMaxPrice(Number(e.target.value));
+                  const val = Number(e.target.value);
+                  setMaxPrice(val >= catalogMaxPrice ? null : val);
                   setCurrentPage(1);
                 }}
                 style={{
@@ -643,20 +656,20 @@ export function CatalogPage() {
               />
               <div className="mt-2 flex items-center justify-between text-[10px] font-medium text-slate-400">
                 <span>Rs. {MIN_PRICE.toLocaleString()}</span>
-                <span>Rs. {MAX_PRICE.toLocaleString()}</span>
+                <span>Rs. {catalogMaxPrice.toLocaleString()}</span>
               </div>
               <div className="mt-2.5 grid grid-cols-3 gap-1.5">
-                {[150000, 450000, 1050000].map((preset) => (
+                {[150000, 450000, catalogMaxPrice].map((preset) => (
                   <button
                     key={preset}
                     type="button"
                     onClick={() => {
-                      setMaxPrice(preset);
+                      setMaxPrice(preset >= catalogMaxPrice ? null : preset);
                       setCurrentPage(1);
                     }}
                     className={cn(
                       'rounded-lg border py-1 text-[10px] font-semibold transition cursor-pointer',
-                      maxPrice === preset
+                      effectiveMaxPrice === preset
                         ? 'border-[#0284c7] bg-sky-50 text-[#0284c7]'
                         : 'border-slate-200 text-slate-500 hover:border-slate-300',
                     )}

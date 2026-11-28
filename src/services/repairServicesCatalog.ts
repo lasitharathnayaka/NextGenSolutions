@@ -129,10 +129,8 @@ export function generateNextServiceId(
 export function subscribeRepairServices(
   onUpdate: (services: RepairServicePackage[]) => void,
 ): () => void {
-  // Emit local/default list immediately so UI never flashes empty
-  onUpdate(readLocalServices());
-
   if (!isFirebaseConfigured || !db) {
+    onUpdate(readLocalServices());
     const handleStorage = (e: StorageEvent) => {
       if (e.key === LOCAL_STORAGE_KEY) onUpdate(readLocalServices());
     };
@@ -143,10 +141,6 @@ export function subscribeRepairServices(
   return onSnapshot(
     collection(db, 'repair_services'),
     (snap) => {
-      if (snap.empty) {
-        onUpdate(readLocalServices());
-        return;
-      }
       const rows = snap.docs
         .map((d) => ({
           id: d.id,
@@ -158,7 +152,7 @@ export function subscribeRepairServices(
     },
     (err) => {
       console.error('Failed to subscribe to repair_services:', err);
-      onUpdate(readLocalServices());
+      onUpdate([]);
     },
   );
 }

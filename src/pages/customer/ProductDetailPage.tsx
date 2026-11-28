@@ -28,6 +28,7 @@ import {
 import { CATALOG_PRODUCTS } from '@/data/catalogProducts';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { isFirebaseConfigured } from '@/lib/firebase';
 import {
   subscribeProducts,
   uploadProductImage,
@@ -61,7 +62,7 @@ export function ProductDetailPage() {
           p.id === id ||
           p.sku.toLowerCase() === id.toLowerCase(),
       )
-    : undefined;
+    : liveProducts[0];
 
   const product = matchedDbByParam
     ? buildProductDetailFromDb(matchedDbByParam)
@@ -743,25 +744,37 @@ export function ProductDetailPage() {
                   </div>
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs">
-                  <dl className="divide-y divide-slate-100">
-                    {product.specs.map((row, idx) => (
-                      <div
-                        key={row.label}
-                        className={cn(
-                          'grid grid-cols-1 gap-1 px-5 py-3.5 text-xs sm:grid-cols-12 sm:gap-4',
-                          idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white',
-                        )}
-                      >
-                        <dt className="font-semibold text-slate-500 sm:col-span-4">
-                          {row.label}
-                        </dt>
-                        <dd className="font-bold text-slate-800 sm:col-span-8">
-                          {row.value}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
+                <div className="space-y-4">
+                  {product.description && (
+                    <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                        Device Description &amp; Specifications
+                      </h3>
+                      <p className="mt-2.5 whitespace-pre-line text-xs leading-relaxed text-slate-700">
+                        {product.description}
+                      </p>
+                    </div>
+                  )}
+                  <div className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs">
+                    <dl className="divide-y divide-slate-100">
+                      {product.specs.map((row, idx) => (
+                        <div
+                          key={row.label}
+                          className={cn(
+                            'grid grid-cols-1 gap-1 px-5 py-3.5 text-xs sm:grid-cols-12 sm:gap-4',
+                            idx % 2 === 0 ? 'bg-slate-50/60' : 'bg-white',
+                          )}
+                        >
+                          <dt className="font-semibold text-slate-500 sm:col-span-4">
+                            {row.label}
+                          </dt>
+                          <dd className="font-bold text-slate-800 sm:col-span-8">
+                            {row.value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
                 </div>
               )}
             </div>
@@ -986,15 +999,17 @@ export function ProductDetailPage() {
             detail: buildProductDetailFromDb(dbItem),
           });
         }
-        for (const catItem of CATALOG_PRODUCTS) {
-          if (seenIds.has(catItem.id)) continue;
-          if (normalizeCompareGroup(catItem.category) !== currentGroup) continue;
-          seenIds.add(catItem.id);
-          comparePool.push({
-            id: catItem.id,
-            label: `${catItem.name} (${catItem.sku})`,
-            detail: getProductDetailById(catItem.id),
-          });
+        if (!isFirebaseConfigured) {
+          for (const catItem of CATALOG_PRODUCTS) {
+            if (seenIds.has(catItem.id)) continue;
+            if (normalizeCompareGroup(catItem.category) !== currentGroup) continue;
+            seenIds.add(catItem.id);
+            comparePool.push({
+              id: catItem.id,
+              label: `${catItem.name} (${catItem.sku})`,
+              detail: getProductDetailById(catItem.id),
+            });
+          }
         }
 
         const otherEntry =

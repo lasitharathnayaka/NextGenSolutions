@@ -24,7 +24,12 @@ import {
 import { useCart } from '@/contexts/CartContext';
 import { useFavorites } from '@/contexts/FavoritesContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { isFirebaseConfigured } from '@/lib/firebase';
 import { subscribeProducts, type DbProduct } from '@/services/productsService';
+import {
+  subscribeSoftwareProducts,
+  type DbSoftwareProduct,
+} from '@/services/softwareService';
 import { cn } from '@/lib/utils';
 
 const CATEGORIES = [
@@ -143,10 +148,17 @@ export function HomePage() {
   const [recentlyAdded, setRecentlyAdded] = useState<Record<string, boolean>>({});
   const [heroSlideIdx, setHeroSlideIdx] = useState(0);
   const [liveProducts, setLiveProducts] = useState<DbProduct[]>([]);
+  const [liveSoftware, setLiveSoftware] = useState<DbSoftwareProduct[]>([]);
 
   useEffect(() => {
-    const unsub = subscribeProducts((rows) => setLiveProducts(rows));
-    return () => unsub();
+    const unsubProducts = subscribeProducts((rows) => setLiveProducts(rows));
+    const unsubSoftware = subscribeSoftwareProducts((rows) =>
+      setLiveSoftware(rows),
+    );
+    return () => {
+      unsubProducts();
+      unsubSoftware();
+    };
   }, []);
 
   const isFeaturedInStock = (product: FeaturedDealProduct): boolean => {
@@ -168,7 +180,61 @@ export function HomePage() {
 
   const activeSlide = HERO_SLIDES[heroSlideIdx];
 
-  const filteredProducts = FEATURED_DEALS.filter((product) => {
+  const dynamicDeals: FeaturedDealProduct[] = isFirebaseConfigured
+    ? [
+        ...liveProducts
+          .filter((p) => p.is_active !== false)
+          .slice(0, 8)
+          .map((p): FeaturedDealProduct => {
+            const dealCategory: DealCategory =
+              p.category === 'RAM' ||
+              p.category === 'SSD / Storage' ||
+              p.category === 'Components'
+                ? 'components'
+                : 'workstations';
+            const specLines =
+              p.specs && p.specs.length > 0
+                ? p.specs.slice(0, 3)
+                : p.subtitle
+                  ? p.subtitle
+                      .split(',')
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                      .slice(0, 3)
+                  : [p.category];
+            return {
+              id: p.slug || p.id,
+              sku: p.sku,
+              name: p.name,
+              category: dealCategory,
+              badge: p.condition,
+              badgeVariant: p.condition === 'Brand New' ? 'emerald' : 'amber',
+              image: p.image_urls?.[0] || '/images/dell-xps-15.jpg',
+              specs: specLines,
+              warranty: p.warranty || '1 Yr Warranty',
+              price: Number(p.price) || 0,
+            };
+          }),
+        ...liveSoftware.slice(0, 4).map((sw): FeaturedDealProduct => ({
+          id: sw.id,
+          sku: sw.batch_code || sw.id,
+          name: sw.name,
+          category: 'software',
+          badge: 'Instant Delivery',
+          badgeVariant: 'emerald',
+          image: '/images/cybercraft-studio.jpg',
+          specs:
+            sw.features && sw.features.length > 0
+              ? sw.features.slice(0, 3)
+              : [sw.platform || 'Multi-Platform', 'Official Digital License'],
+          warranty: 'Official License Key',
+          price: Number(sw.price) || 0,
+          priceSuffix: sw.price_label === 'Annual Price' ? '/yr' : undefined,
+        })),
+      ]
+    : FEATURED_DEALS;
+
+  const filteredProducts = dynamicDeals.filter((product) => {
     if (activeTab === 'all') return true;
     return product.category === activeTab;
   });
@@ -499,6 +565,16 @@ export function HomePage() {
         </div>
 
         {/* Product Grid */}
+        {filteredProducts.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center">
+            <p className="text-sm font-bold text-slate-800">
+              No featured products available yet
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Products added in the Admin Console will appear here automatically.
+            </p>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {filteredProducts.map((product) => {
             const isWishlisted = isFavorite(product.id);
@@ -636,6 +712,7 @@ export function HomePage() {
             );
           })}
         </div>
+        )}
       </section>
 
       {/* Trust & Benefits Strip */}

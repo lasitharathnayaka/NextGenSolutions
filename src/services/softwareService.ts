@@ -117,6 +117,7 @@ export async function createSoftwareProductWithKeys(payload: {
   platform: string;
   price: number;
   batch_code: string;
+  description?: string;
   keys: string[];
 }): Promise<{ error: string | null }> {
   if (!isFirebaseConfigured || !db) return { error: null };
@@ -132,7 +133,9 @@ export async function createSoftwareProductWithKeys(payload: {
       vendor: 'Enterprise Retail',
       category: 'Productivity',
       platform: payload.platform,
-      description: `Verified digital retail license for ${payload.name}.`,
+      description:
+        payload.description?.trim() ||
+        `Verified digital retail license for ${payload.name}.`,
       features: ['Instant Key Delivery', 'Official Updates', '24/7 Support'],
       price_label: 'Retail Price',
       price: payload.price,

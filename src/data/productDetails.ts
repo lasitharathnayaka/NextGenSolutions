@@ -53,6 +53,7 @@ export interface ProductDetailData {
   conditions: ConditionTier[];
   thermalStatus: string;
   osInstallation: string;
+  description?: string;
   specs: ProductSpecRow[];
   docks: DockOption[];
   reviews: ProductReview[];
@@ -416,8 +417,8 @@ export function buildProductDetailFromDb(dbItem: DbProduct): ProductDetailData {
         : dbItem.category,
     breadcrumbName: dbItem.name,
     title: dbItem.name,
-    rating: 4.8,
-    reviewCount: 12,
+    rating: 0,
+    reviewCount: 0,
     gallery: galleryImages.slice(0, 4),
     defaultConditionId: activeTier.id,
     conditions: [activeTier],
@@ -427,6 +428,7 @@ export function buildProductDetailFromDb(dbItem: DbProduct): ProductDetailData {
       (dbItem.category === 'RAM' || dbItem.category === 'SSD / Storage'
         ? 'Diagnostic Burn-In Verified'
         : 'Windows 11 Pro (Licensed)'),
+    description: dbItem.description?.trim() || undefined,
     specs: [
       { label: 'Product ID', value: dbItem.sku },
       { label: 'Brand', value: dbItem.brand || 'NextGen' },
@@ -442,6 +444,6 @@ export function buildProductDetailFromDb(dbItem: DbProduct): ProductDetailData {
       { label: 'Warranty Coverage', value: dbItem.warranty || '1 Yr Warranty' },
     ],
     docks: DEFAULT_DOCK_OPTIONS,
-    reviews: DEFAULT_REVIEWS,
+    reviews: [],
   };
 }

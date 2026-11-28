@@ -31,6 +31,7 @@ export interface DbProduct {
   warranty_tone: 'official' | 'seller';
   battery_health?: string | null;
   os_installation?: string | null;
+  description?: string | null;
   specs: string[];
   image_urls: string[];
   is_featured: boolean;

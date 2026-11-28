@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { isFirebaseConfigured } from '@/lib/firebase';
 import {
   subscribeSoftwareProducts,
   type DbSoftwareProduct,
@@ -226,6 +227,10 @@ export function SoftwarePage() {
       accentText: 'text-[#0284c7]',
       isWideFeatured: false,
     }));
+
+    if (isFirebaseConfigured) {
+      return mappedLive;
+    }
 
     const existingSkus = new Set(
       mappedLive.map((s) => (s.sku || '').toLowerCase()),
@@ -489,6 +494,16 @@ export function SoftwarePage() {
 
         {/* Full-Width License Catalog */}
         <div className="mt-6">
+          {filteredAndSortedLicenses.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-14 text-center">
+              <p className="text-sm font-bold text-slate-800">
+                No software licenses added yet
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Software packages added in the Admin Console will appear here automatically.
+              </p>
+            </div>
+          ) : (
           <div
             className={cn(
               'grid gap-5',
@@ -700,6 +715,7 @@ export function SoftwarePage() {
                 );
               })}
           </div>
+          )}
 
           {/* Activation Assistance Banner */}
           <div className="mt-8 flex flex-col justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-2xs sm:flex-row sm:items-center">
