@@ -16,8 +16,11 @@ import { db, isFirebaseConfigured } from '@/lib/firebase';
 export interface CreateRepairBookingInput {
   ticketNumber: string;
   userId?: string | null;
+  customerId?: string | null;
   customerName?: string | null;
   customerEmail?: string | null;
+  customerPhone?: string | null;
+  customerAddress?: string | null;
   deviceType: 'laptop' | 'desktop';
   servicePackage: string;
   brandModel: string;
@@ -35,7 +38,10 @@ export interface CreateRepairBookingInput {
 export interface DbRepairBooking {
   id: string;
   ticket_number: string;
+  customer_id?: string | null;
   customer_name: string | null;
+  customer_phone?: string | null;
+  customer_address?: string | null;
   brand_model: string;
   service_package: string;
   issue_description: string;
@@ -55,8 +61,11 @@ export async function createRepairBooking(
     await setDoc(doc(db, 'repair_bookings', input.ticketNumber), {
       ticket_number: input.ticketNumber,
       user_id: input.userId ?? null,
+      customer_id: input.customerId ?? null,
       customer_name: input.customerName ?? null,
       customer_email: input.customerEmail ?? null,
+      customer_phone: input.customerPhone ?? null,
+      customer_address: input.customerAddress ?? null,
       device_type: input.deviceType,
       service_package: input.servicePackage,
       brand_model: input.brandModel,

@@ -1,16 +1,19 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Cpu,
   ShieldCheck,
   ExternalLink,
   LogOut,
   LayoutDashboard,
   ArrowLeft,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export function AdminNavbar() {
   const { profile, user, signOut } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const isOnAdmin = pathname.startsWith('/admin');
@@ -31,11 +34,13 @@ export function AdminNavbar() {
         {/* Left: Brand + Admin Console Badge */}
         <div className="flex items-center gap-3">
           <Link to="/admin" className="flex shrink-0 items-center gap-2.5 group">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#16263f] border border-slate-700/70 text-sky-400 group-hover:border-sky-500/60 transition">
-              <Cpu className="h-4 w-4" />
-            </span>
+            <img
+              src="/images/nextgen-logo.jpg"
+              alt="NextGenSolution logo"
+              className="h-9 w-9 rounded-lg object-cover border border-sky-500/30 shadow-xs group-hover:border-sky-400/70 transition"
+            />
             <span className="text-[15px] font-bold tracking-tight text-white">
-              NextGenSolutions
+              NextGenSolution
             </span>
           </Link>
 
@@ -45,8 +50,22 @@ export function AdminNavbar() {
           </span>
         </div>
 
-        {/* Right: Storefront Preview / Back to Admin + Admin Profile + Sign Out */}
+        {/* Right: Theme Toggle + Storefront Preview / Back to Admin + Admin Profile + Sign Out */}
         <div className="flex items-center gap-2.5 sm:gap-3">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700/80 bg-[#152236] text-slate-300 hover:border-sky-500/60 hover:text-amber-300 transition cursor-pointer"
+          >
+            {isDark ? (
+              <Sun className="h-4 w-4 text-amber-300" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
+          </button>
+
           {isOnAdmin ? (
             <Link
               to="/"

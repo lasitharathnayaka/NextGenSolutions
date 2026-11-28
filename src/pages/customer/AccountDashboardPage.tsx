@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   LayoutGrid,
@@ -19,6 +19,9 @@ import {
   Plus,
   Sparkles,
   ArrowRight,
+  Pencil,
+  Trash2,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,6 +38,12 @@ import {
   subscribeUserSupportTickets,
   type DbSupportTicket,
 } from '@/services/supportService';
+import {
+  deleteUserAddress,
+  saveUserAddress,
+  subscribeUserAddresses,
+  type SavedAddress,
+} from '@/services/addressesService';
 import { downloadOrderInvoicePdf } from '@/lib/invoicePdf';
 
 type AccountTab =
@@ -48,39 +57,34 @@ type AccountTab =
 
 interface SoftwareKeyRow {
   id: string;
+  productId?: string;
+  orderNumber: string;
   name: string;
   orderDate: string;
   maskedKey: string;
   fullKey: string;
+  isDelivered: boolean;
   status: string;
 }
 
-const SOFTWARE_KEYS: SoftwareKeyRow[] = [
-  {
-    id: 'win-11-pro',
-    name: 'Windows 11 Pro (Workstation Edition)',
-    orderDate: 'Sep 14, 2024',
-    maskedKey: 'XXXXX-XXXXX-8921A',
-    fullKey: 'W11P8-9K4M2-7Q9X3-8921A',
-    status: 'Active',
-  },
-  {
-    id: 'office-2024',
-    name: 'Microsoft Office 2024 Pro Plus',
-    orderDate: 'Aug 22, 2024',
-    maskedKey: 'XXXXX-XXXXX-4419B',
-    fullKey: 'OFF24-7N2V9-5P8C1-4419B',
-    status: 'Active',
-  },
-  {
-    id: 'kaspersky-total',
-    name: 'Kaspersky Total Security (3-Device)',
-    orderDate: 'Jul 10, 2024',
-    maskedKey: 'XXXXX-XXXXX-9912X',
-    fullKey: 'KASP3-4M8Q2-1R6T5-9912X',
-    status: 'Active',
-  },
-];
+function isSoftwareOrderItem(itemName: string, productId?: string | null) {
+  if (productId && /^NGS-SW-/i.test(productId)) return true;
+  return /\b(windows|office|kaspersky|adobe|visual studio|cybercraft|license|pro studio|antivirus|software)\b/i.test(
+    itemName,
+  );
+}
+
+function buildLicenseKey(orderNumber: string, itemIdx: number) {
+  const digits = orderNumber.replace(/\D/g, '').padStart(4, '7').slice(-4);
+  const seg1 = `NGS${digits.slice(0, 2)}`;
+  const seg2 = `${String(itemIdx + 1).padStart(2, '0')}K9M`;
+  const seg3 = `7Q${digits.slice(2, 4)}X`;
+  const seg4 = `${digits}A`;
+  return {
+    fullKey: `${seg1}-${seg2}-${seg3}-${seg4}`,
+    maskedKey: `XXXXX-XXXXX-${seg4}`,
+  };
+}
 
 const REPAIR_STAGE_LIST = [
   'Received',
@@ -117,13 +121,117 @@ export function AccountDashboardPage() {
     const unsubSupport = subscribeUserSupportTickets(user.uid, (rows) => {
       setLiveSupportTickets(rows);
     });
+    const unsubAddresses = subscribeUserAddresses(user.uid, (rows) => {
+      setSavedAddresses(rows);
+    });
 
     return () => {
       unsubOrders();
       unsubRepairs();
       unsubSupport();
+      unsubAddresses();
     };
   }, [user?.uid]);
+
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<SavedAddress | null>(
+    null,
+  );
+  const [addrLabel, setAddrLabel] = useState('Home Delivery');
+  const [addrRecipient, setAddrRecipient] = useState('');
+  const [addrPhone, setAddrPhone] = useState('');
+  const [addrStreet, setAddrStreet] = useState('');
+  const [addrCity, setAddrCity] = useState('');
+  const [addrIsDefault, setAddrIsDefault] = useState(true);
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressFeedback, setAddressFeedback] = useState<string | null>(null);
+
+  const openAddAddressModal = () => {
+    setEditingAddress(null);
+    setAddrLabel('Home Delivery');
+    setAddrRecipient('');
+    setAddrPhone('');
+    setAddrStreet('');
+    setAddrCity('');
+    setAddrIsDefault(savedAddresses.length === 0);
+    setAddressModalOpen(true);
+  };
+
+  const openEditAddressModal = (addr: SavedAddress) => {
+    setEditingAddress(addr);
+    setAddrLabel(addr.label);
+    setAddrRecipient(addr.recipient_name);
+    setAddrPhone(addr.phone);
+    setAddrStreet(addr.street_address);
+    setAddrCity(addr.city);
+    setAddrIsDefault(addr.is_default);
+    setAddressModalOpen(true);
+  };
+
+  const handleSaveAddress = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!user?.uid || !addrRecipient.trim() || !addrStreet.trim()) return;
+    setSavingAddress(true);
+    setAddressFeedback(null);
+
+    const payload: Omit<SavedAddress, 'created_at'> = {
+      id: editingAddress?.id ?? `addr-${Date.now()}`,
+      user_id: user.uid,
+      label: addrLabel.trim() || 'Home Delivery',
+      recipient_name: addrRecipient.trim(),
+      phone: addrPhone.trim(),
+      street_address: addrStreet.trim(),
+      city: addrCity.trim(),
+      is_default: addrIsDefault || savedAddresses.length === 0,
+    };
+
+    const nextLocal = editingAddress
+      ? savedAddresses.map((a) =>
+          a.id === editingAddress.id
+            ? payload
+            : payload.is_default
+              ? { ...a, is_default: false }
+              : a,
+        )
+      : [
+          ...(payload.is_default
+            ? savedAddresses.map((a) => ({ ...a, is_default: false }))
+            : savedAddresses),
+          payload,
+        ];
+
+    setSavedAddresses(nextLocal);
+    const { error } = await saveUserAddress(payload, savedAddresses);
+    setSavingAddress(false);
+    setAddressModalOpen(false);
+    setAddressFeedback(
+      error
+        ? `Saved locally. Sync warning: ${error}`
+        : editingAddress
+          ? 'Address updated successfully.'
+          : 'New address saved successfully.',
+    );
+    window.setTimeout(() => setAddressFeedback(null), 3000);
+  };
+
+  const handleSetDefaultAddress = async (addr: SavedAddress) => {
+    if (!user?.uid || addr.is_default) return;
+    const updated: Omit<SavedAddress, 'created_at'> = {
+      ...addr,
+      is_default: true,
+    };
+    setSavedAddresses((prev) =>
+      prev.map((a) => ({ ...a, is_default: a.id === addr.id })),
+    );
+    await saveUserAddress(updated, savedAddresses);
+  };
+
+  const handleDeleteAddress = async (addr: SavedAddress) => {
+    if (!user?.uid) return;
+    setSavedAddresses((prev) => prev.filter((a) => a.id !== addr.id));
+    await deleteUserAddress(user.uid, addr.id, savedAddresses);
+  };
 
   const displayName = profile?.full_name || user?.displayName || 'Customer';
   const displayEnterpriseId = profile?.enterprise_id || 'NGS-77210';
@@ -156,6 +264,40 @@ export function AccountDashboardPage() {
     window.setTimeout(() => setDownloadedOrderId(null), 1800);
   };
 
+  const purchasedSoftwareKeys = useMemo<SoftwareKeyRow[]>(() => {
+    const rows: SoftwareKeyRow[] = [];
+    for (const order of liveOrders) {
+      const orderDate = order.created_at?.toDate
+        ? order.created_at.toDate().toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          })
+        : 'Recent Order';
+      const isDelivered = order.fulfillment_status === 'Delivered';
+
+      (order.order_items ?? []).forEach((item, idx) => {
+        if (!isSoftwareOrderItem(item.item_name, item.product_id)) return;
+        const { fullKey, maskedKey } = buildLicenseKey(order.order_number, idx);
+        rows.push({
+          id: `${order.id}-${idx}`,
+          productId: item.product_id ?? undefined,
+          orderNumber: order.order_number,
+          name:
+            item.quantity > 1
+              ? `${item.item_name} × ${item.quantity}`
+              : item.item_name,
+          orderDate,
+          maskedKey,
+          fullKey,
+          isDelivered,
+          status: isDelivered ? 'Active' : order.fulfillment_status,
+        });
+      });
+    }
+    return rows;
+  }, [liveOrders]);
+
   const showUnifiedDashboard =
     activeTab === 'repairs' || activeTab === 'overview';
 
@@ -176,7 +318,7 @@ export function AccountDashboardPage() {
       id: 'keys',
       label: 'My Software Keys',
       icon: KeyRound,
-      badge: SOFTWARE_KEYS.length,
+      badge: purchasedSoftwareKeys.length,
     },
     {
       id: 'repairs',
@@ -272,7 +414,8 @@ export function AccountDashboardPage() {
               <div>
                 <p className="text-[10px] text-slate-400">Software Keys</p>
                 <p className="font-extrabold text-sky-400">
-                  {SOFTWARE_KEYS.length} Active
+                  {purchasedSoftwareKeys.length} License
+                  {purchasedSoftwareKeys.length !== 1 ? 's' : ''}
                 </p>
               </div>
               <span className="h-6 w-px bg-slate-800" />
@@ -428,7 +571,7 @@ export function AccountDashboardPage() {
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="rounded-md bg-sky-50 border border-sky-200/70 px-2.5 py-0.5 font-mono text-[10px] font-bold text-[#0284c7]">
-                                Ticket #{repair.ticket_number}
+                                Order #{repair.ticket_number.replace(/^NGS-REP-/i, 'NGS-ORD-')}
                               </span>
                               <span
                                 className={cn(
@@ -619,68 +762,122 @@ export function AccountDashboardPage() {
                       Purchased Software Keys
                     </h2>
                     <p className="text-[11px] text-slate-400">
-                      Click the copy icon to reveal and copy your retail key.
+                      Your purchased software licenses appear here automatically.
+                      Keys activate once Admin marks your order Delivered.
                     </p>
                   </div>
                   <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
-                    {SOFTWARE_KEYS.length} Active Licenses
+                    {purchasedSoftwareKeys.length} License
+                    {purchasedSoftwareKeys.length !== 1 ? 's' : ''}
                   </span>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[540px] text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        <th className="rounded-l-lg px-3.5 py-2.5">
-                          Software Name
-                        </th>
-                        <th className="px-3.5 py-2.5">Order Date</th>
-                        <th className="px-3.5 py-2.5">License Key</th>
-                        <th className="rounded-r-lg px-3.5 py-2.5">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {SOFTWARE_KEYS.map((row) => {
-                        const isCopied = copiedKeyId === row.id;
-                        return (
-                          <tr key={row.id} className="hover:bg-slate-50/50">
-                            <td className="px-3.5 py-3.5 font-semibold text-slate-900">
-                              {row.name}
-                            </td>
-                            <td className="px-3.5 py-3.5 text-slate-500">
-                              {row.orderDate}
-                            </td>
-                            <td className="px-3.5 py-3.5">
-                              <div className="inline-flex items-center gap-2">
-                                <code className="rounded-md border border-slate-200/80 bg-slate-50 px-2.5 py-1 font-mono text-[11px] text-slate-700">
-                                  {isCopied ? row.fullKey : row.maskedKey}
-                                </code>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyKey(row)}
-                                  aria-label={`Copy key for ${row.name}`}
-                                  className="rounded-md p-1.5 text-slate-400 hover:bg-sky-50 hover:text-[#0284c7] transition cursor-pointer"
-                                >
-                                  {isCopied ? (
-                                    <Check className="h-3.5 w-3.5 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="h-3.5 w-3.5" />
+                {purchasedSoftwareKeys.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 py-10 px-4 text-center">
+                    <KeyRound className="mx-auto h-7 w-7 text-slate-400" />
+                    <p className="mt-2.5 text-xs font-bold text-slate-800">
+                      No purchased software keys yet
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Software licenses you order from our Software Store will
+                      appear here with live activation status.
+                    </p>
+                    <Link
+                      to="/software"
+                      className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#0284c7] px-4 py-2 text-xs font-bold text-white hover:bg-[#0369a1] transition"
+                    >
+                      <span>Browse Software Store</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[540px] text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          <th className="rounded-l-lg px-3.5 py-2.5">
+                            Software Name
+                          </th>
+                          <th className="px-3.5 py-2.5">Order Date</th>
+                          <th className="px-3.5 py-2.5">License Key</th>
+                          <th className="rounded-r-lg px-3.5 py-2.5">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {purchasedSoftwareKeys.map((row) => {
+                          const isCopied = copiedKeyId === row.id;
+                          return (
+                            <tr key={row.id} className="hover:bg-slate-50/50">
+                              <td className="px-3.5 py-3.5">
+                                <p className="font-semibold text-slate-900">
+                                  {row.name}
+                                </p>
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                  <span className="font-mono text-[10px] text-slate-400">
+                                    #{row.orderNumber}
+                                  </span>
+                                  {row.productId && (
+                                    <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-600">
+                                      {row.productId}
+                                    </span>
                                   )}
-                                </button>
-                              </div>
-                            </td>
-                            <td className="px-3.5 py-3.5">
-                              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
-                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                <span>{row.status}</span>
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                                </div>
+                              </td>
+                              <td className="px-3.5 py-3.5 text-slate-500">
+                                {row.orderDate}
+                              </td>
+                              <td className="px-3.5 py-3.5">
+                                {row.isDelivered ? (
+                                  <div className="inline-flex items-center gap-2">
+                                    <code className="rounded-md border border-slate-200/80 bg-slate-50 px-2.5 py-1 font-mono text-[11px] text-slate-700">
+                                      {isCopied ? row.fullKey : row.maskedKey}
+                                    </code>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyKey(row)}
+                                      aria-label={`Copy key for ${row.name}`}
+                                      className="rounded-md p-1.5 text-slate-400 hover:bg-sky-50 hover:text-[#0284c7] transition cursor-pointer"
+                                    >
+                                      {isCopied ? (
+                                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                      ) : (
+                                        <Copy className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] font-medium text-amber-600">
+                                    Pending WhatsApp confirmation
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-3.5 py-3.5">
+                                <span
+                                  className={cn(
+                                    'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold',
+                                    row.isDelivered
+                                      ? 'bg-emerald-50 text-emerald-700'
+                                      : 'bg-amber-50 text-amber-700',
+                                  )}
+                                >
+                                  <span
+                                    className={cn(
+                                      'h-1.5 w-1.5 rounded-full',
+                                      row.isDelivered
+                                        ? 'bg-emerald-500'
+                                        : 'bg-amber-500',
+                                    )}
+                                  />
+                                  <span>{row.status}</span>
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </section>
             )}
 
@@ -831,42 +1028,124 @@ export function AccountDashboardPage() {
             {/* Saved Addresses Sub-View */}
             {activeTab === 'addresses' && (
               <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-sm font-bold text-slate-900">
-                    Saved Shipping &amp; Pickup Addresses
-                  </h2>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-900">
+                      Saved Shipping &amp; Pickup Addresses
+                    </h2>
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      Manage your delivery and courier pickup locations across
+                      Sri Lanka.
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-xl bg-[#0284c7] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0369a1] cursor-pointer"
+                    onClick={openAddAddressModal}
+                    className="inline-flex items-center gap-1 rounded-xl bg-[#0284c7] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0369a1] transition cursor-pointer"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     <span>Add Address</span>
                   </button>
                 </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="rounded-xl border-2 border-[#0284c7] bg-sky-50/30 p-4">
-                    <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[10px] font-bold text-[#0284c7]">
-                      Default Office
-                    </span>
-                    <p className="mt-2.5 text-xs font-bold text-slate-900">
-                      Alex Miller — NextGen Enterprise Lab
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      420 Tech Plaza, Suite 800, Colombo 03
-                    </p>
+
+                {addressFeedback && (
+                  <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-800">
+                    {addressFeedback}
                   </div>
-                  <div className="rounded-xl border border-slate-200 p-4">
-                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                      Home Delivery
-                    </span>
-                    <p className="mt-2.5 text-xs font-bold text-slate-900">
-                      Alex Miller
+                )}
+
+                {savedAddresses.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 py-10 px-4 text-center">
+                    <MapPin className="mx-auto h-7 w-7 text-slate-400" />
+                    <p className="mt-2.5 text-xs font-bold text-slate-800">
+                      No saved addresses yet
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      18 Park Avenue, Nawala, Rajagiriya
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Add your home or office address for faster WhatsApp
+                      checkout and repair pickups.
                     </p>
+                    <button
+                      type="button"
+                      onClick={openAddAddressModal}
+                      className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#0284c7] px-4 py-2 text-xs font-bold text-white hover:bg-[#0369a1] transition cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Add Your First Address</span>
+                    </button>
                   </div>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {savedAddresses.map((addr) => (
+                      <div
+                        key={addr.id}
+                        className={cn(
+                          'flex flex-col justify-between rounded-xl p-4 transition',
+                          addr.is_default
+                            ? 'border-2 border-[#0284c7] bg-sky-50/30'
+                            : 'border border-slate-200 bg-white',
+                        )}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className={cn(
+                                'rounded-full px-2.5 py-0.5 text-[10px] font-bold',
+                                addr.is_default
+                                  ? 'bg-sky-100 text-[#0284c7]'
+                                  : 'bg-slate-100 text-slate-600',
+                              )}
+                            >
+                              {addr.is_default
+                                ? `Default · ${addr.label}`
+                                : addr.label}
+                            </span>
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openEditAddressModal(addr)}
+                                aria-label={`Edit ${addr.label}`}
+                                className="rounded-lg p-1 text-slate-400 hover:bg-sky-50 hover:text-[#0284c7] transition cursor-pointer"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAddress(addr)}
+                                aria-label={`Delete ${addr.label}`}
+                                className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <p className="mt-2.5 text-xs font-bold text-slate-900">
+                            {addr.recipient_name}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-600">
+                            {addr.street_address}
+                            {addr.city ? `, ${addr.city}` : ''}
+                          </p>
+                          {addr.phone && (
+                            <p className="mt-1 font-mono text-[11px] text-slate-400">
+                              {addr.phone}
+                            </p>
+                          )}
+                        </div>
+
+                        {!addr.is_default && (
+                          <button
+                            type="button"
+                            onClick={() => handleSetDefaultAddress(addr)}
+                            className="mt-3 self-start text-[11px] font-semibold text-[#0284c7] hover:underline cursor-pointer"
+                          >
+                            Set as Default
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </section>
             )}
 
@@ -983,6 +1262,138 @@ export function AccountDashboardPage() {
           </div>
         </div>
       </div>
+      {/* Add / Edit Saved Address Modal */}
+      {addressModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-[#0d1726] px-6 py-4 text-white">
+              <div className="flex items-center gap-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/20 border border-sky-400/30 text-sky-400">
+                  <MapPin className="h-4 w-4" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold">
+                    {editingAddress ? 'Edit Saved Address' : 'Add New Address'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Used for hardware delivery and courier repair pickups.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAddressModalOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAddress} className="space-y-3.5 p-6 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700">
+                  Address Label
+                </label>
+                <select
+                  value={addrLabel}
+                  onChange={(e) => setAddrLabel(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none cursor-pointer"
+                >
+                  <option value="Home Delivery">Home Delivery</option>
+                  <option value="Office">Office</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                <div>
+                  <label className="block font-semibold text-slate-700">
+                    Recipient Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={addrRecipient}
+                    onChange={(e) => setAddrRecipient(e.target.value)}
+                    placeholder="e.g. Kasun Perera"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={addrPhone}
+                    onChange={(e) => setAddrPhone(e.target.value)}
+                    placeholder="e.g. 077 123 4567"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700">
+                  Street Address *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={addrStreet}
+                  onChange={(e) => setAddrStreet(e.target.value)}
+                  placeholder="e.g. 45/2 Galle Road, Piliyandala"
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700">
+                  City / Postal Code
+                </label>
+                <input
+                  type="text"
+                  value={addrCity}
+                  onChange={(e) => setAddrCity(e.target.value)}
+                  placeholder="e.g. Colombo, 10300"
+                  className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                />
+              </div>
+
+              <label className="flex items-center gap-2 pt-1 font-semibold text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={addrIsDefault}
+                  onChange={(e) => setAddrIsDefault(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-[#0284c7] focus:ring-sky-500"
+                />
+                <span>Set as default shipping &amp; pickup address</span>
+              </label>
+
+              <div className="flex justify-end gap-2.5 border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setAddressModalOpen(false)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingAddress}
+                  className="rounded-xl bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] px-5 py-2 font-bold text-white shadow-sm shadow-sky-500/20 hover:from-[#0369a1] hover:to-[#0284c7] disabled:opacity-60 cursor-pointer"
+                >
+                  {savingAddress
+                    ? 'Saving...'
+                    : editingAddress
+                      ? 'Save Changes'
+                      : 'Save Address'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

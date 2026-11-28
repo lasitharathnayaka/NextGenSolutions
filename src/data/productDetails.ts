@@ -27,6 +27,7 @@ export interface ProductReview {
   rating: number;
   comment: string;
   verified: boolean;
+  imageUrl?: string;
 }
 
 export interface DockOption {
@@ -180,7 +181,7 @@ const DELL_LATITUDE_DETAIL: ProductDetailData = {
       photoBadge: 'Used - Grade A Certified · 95% Battery Health',
       batteryHealth: '95% Original Capacity',
       cosmeticGrade: 'Grade A (Minimal micro-scratches on lid)',
-      warrantyTitle: '6-Month NextGenSolutions Hardware Warranty Included',
+      warrantyTitle: '6-Month NextGenSolution Hardware Warranty Included',
       warrantySubtitle: 'Extendable to 2-Year Full Coverage for Rs. 26,500 at checkout',
     },
     {
@@ -191,7 +192,7 @@ const DELL_LATITUDE_DETAIL: ProductDetailData = {
       photoBadge: 'Used - Grade B Certified · 86% Battery Health',
       batteryHealth: '86% Original Capacity',
       cosmeticGrade: 'Grade B (Light scuffs on lid & palm rest)',
-      warrantyTitle: '3-Month NextGenSolutions Hardware Warranty Included',
+      warrantyTitle: '3-Month NextGenSolution Hardware Warranty Included',
       warrantySubtitle: 'Extendable to 1-Year Full Coverage for Rs. 17,500 at checkout',
     },
   ],
@@ -264,7 +265,7 @@ export function getProductDetailById(id?: string): ProductDetailData {
           photoBadge: `${catalogMatch.conditionLabel === 'Brand New' ? 'Used - Grade A Certified · 95% Battery Health' : catalogMatch.conditionLabel}`,
           batteryHealth: '95% Original Capacity',
           cosmeticGrade: 'Grade A (Minimal micro-scratches on chassis)',
-          warrantyTitle: '6-Month NextGenSolutions Hardware Warranty Included',
+          warrantyTitle: '6-Month NextGenSolution Hardware Warranty Included',
           warrantySubtitle: 'Extendable to 2-Year Full Coverage for Rs. 26,500 at checkout',
         },
         {
@@ -275,7 +276,7 @@ export function getProductDetailById(id?: string): ProductDetailData {
           photoBadge: 'Used - Grade B · 84% Battery Health',
           batteryHealth: '84% Original Capacity',
           cosmeticGrade: 'Grade B (Light cosmetic wear, 100% functional)',
-          warrantyTitle: '3-Month NextGenSolutions Hardware Warranty Included',
+          warrantyTitle: '3-Month NextGenSolution Hardware Warranty Included',
           warrantySubtitle: 'Extendable to 1-Year Full Coverage for Rs. 17,500 at checkout',
         },
       ],

@@ -73,3 +73,170 @@
 .animate-grid-drift {
   animation: gridDrift 18s linear infinite;
 }
+
+/* Enterprise Dark Mode Theme (toggled via html.dark) */
+html.dark body {
+  background-color: #070d18;
+  color: #e2e8f0;
+}
+
+html.dark .bg-\[\#f8fafc\],
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/80,
+html.dark .bg-slate-50\/70,
+html.dark .bg-slate-50\/60,
+html.dark .bg-slate-50\/50 {
+  background-color: #0b1322;
+}
+
+html.dark .bg-white,
+html.dark .bg-white\/95,
+html.dark .bg-white\/90 {
+  background-color: #111c2e;
+}
+
+html.dark .bg-slate-100,
+html.dark .bg-slate-100\/80 {
+  background-color: #17253b;
+}
+
+html.dark .hover\:bg-slate-50:hover,
+html.dark .hover\:bg-slate-50\/70:hover,
+html.dark .hover\:bg-slate-50\/60:hover,
+html.dark .hover\:bg-slate-50\/40:hover,
+html.dark .hover\:bg-white:hover {
+  background-color: #16243a;
+}
+
+html.dark .border-slate-200,
+html.dark .border-slate-200\/90,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-200\/70,
+html.dark .border-slate-300 {
+  border-color: #1e2f4a;
+}
+
+html.dark .border-slate-100 {
+  border-color: #18263d;
+}
+
+html.dark .divide-slate-100 > :not(:last-child),
+html.dark .divide-slate-200 > :not(:last-child) {
+  border-color: #18263d;
+}
+
+html.dark .text-slate-900 {
+  color: #f1f5f9;
+}
+
+html.dark .text-slate-800 {
+  color: #e2e8f0;
+}
+
+html.dark .text-slate-700 {
+  color: #cbd5e1;
+}
+
+html.dark .text-slate-600 {
+  color: #94a3b8;
+}
+
+html.dark .text-slate-500 {
+  color: #94a3b8;
+}
+
+html.dark .text-slate-400 {
+  color: #64748b;
+}
+
+html.dark .shadow-slate-200\/60,
+html.dark .shadow-sm,
+html.dark .shadow-md {
+  --tw-shadow-color: rgba(2, 6, 23, 0.55);
+}
+
+/* Soft tinted badges & banners in dark mode */
+html.dark .bg-sky-50,
+html.dark .bg-sky-50\/50,
+html.dark .bg-sky-50\/40,
+html.dark .bg-sky-50\/30 {
+  background-color: rgba(14, 165, 233, 0.14);
+}
+
+html.dark .bg-sky-100 {
+  background-color: rgba(14, 165, 233, 0.22);
+}
+
+html.dark .border-sky-100,
+html.dark .border-sky-200,
+html.dark .border-sky-200\/70 {
+  border-color: rgba(56, 189, 248, 0.28);
+}
+
+html.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.14);
+}
+
+html.dark .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+html.dark .text-emerald-800,
+html.dark .text-emerald-700 {
+  color: #34d399;
+}
+
+html.dark .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.14);
+}
+
+html.dark .border-amber-200 {
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+html.dark .text-amber-800,
+html.dark .text-amber-700 {
+  color: #fbbf24;
+}
+
+html.dark .bg-rose-50 {
+  background-color: rgba(244, 63, 94, 0.14);
+}
+
+html.dark .border-rose-200 {
+  border-color: rgba(244, 63, 94, 0.32);
+}
+
+html.dark .text-rose-700,
+html.dark .text-rose-600 {
+  color: #fb7185;
+}
+
+html.dark .bg-indigo-50 {
+  background-color: rgba(99, 102, 241, 0.16);
+}
+
+html.dark .text-indigo-600 {
+  color: #818cf8;
+}
+
+/* Inputs & selects in dark mode */
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark textarea,
+html.dark select {
+  background-color: #0b1424;
+  border-color: #243654;
+  color: #f1f5f9;
+}
+
+html.dark input:read-only,
+html.dark input:disabled,
+html.dark select:disabled {
+  background-color: #0e192b;
+  color: #94a3b8;
+}
+
+html.dark option {
+  background-color: #0d1726;
+  color: #f1f5f9;
+}

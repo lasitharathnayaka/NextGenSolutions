@@ -427,6 +427,7 @@ export function CatalogPage() {
     }
     addToCart({
       id: product.id,
+      sku: product.sku,
       name: product.name,
       price: product.price,
       image: product.image,
@@ -1057,7 +1058,7 @@ export function CatalogPage() {
                                   <span>{isInStock ? 'In Stock' : 'Out of Stock'}</span>
                                 </span>
                                 <span className="text-[10px] font-medium text-slate-400">
-                                  SKU: {product.sku}
+                                  Product ID: {product.sku}
                                 </span>
                               </span>
                             </div>

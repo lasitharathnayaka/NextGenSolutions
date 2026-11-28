@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -22,6 +22,10 @@ import {
 } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  subscribeSoftwareProducts,
+  type DbSoftwareProduct,
+} from '@/services/softwareService';
 import { cn } from '@/lib/utils';
 
 type SortOption = 'featured' | 'price-asc' | 'price-desc' | 'name';
@@ -30,6 +34,7 @@ type SoftwareCategory = 'All' | 'OS' | 'Productivity' | 'Security' | 'Creative &
 
 interface SoftwareLicense {
   id: string;
+  sku?: string;
   name: string;
   vendor: string;
   category: Exclude<SoftwareCategory, 'All'>;
@@ -177,6 +182,63 @@ export function SoftwarePage() {
   const [sortBy, setSortBy] = useState<SortOption>('featured');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [recentlyAdded, setRecentlyAdded] = useState<Record<string, boolean>>({});
+  const [liveDbSoftware, setLiveDbSoftware] = useState<DbSoftwareProduct[]>([]);
+
+  useEffect(() => {
+    const unsub = subscribeSoftwareProducts((rows) => {
+      setLiveDbSoftware(rows);
+    });
+    return unsub;
+  }, []);
+
+  const allLicenses = useMemo<SoftwareLicense[]>(() => {
+    const mappedLive: SoftwareLicense[] = liveDbSoftware.map((dbItem) => ({
+      id: dbItem.id,
+      sku: dbItem.batch_code || dbItem.id,
+      vendor: (dbItem.vendor || 'NEXTGEN · DIGITAL LICENSE').toUpperCase(),
+      name: dbItem.name,
+      category:
+        dbItem.category === 'OS' ||
+        dbItem.category === 'Productivity' ||
+        dbItem.category === 'Security' ||
+        dbItem.category === 'Creative & Dev'
+          ? dbItem.category
+          : 'OS',
+      platform: dbItem.platform || 'Multi-Platform',
+      description:
+        dbItem.description ||
+        `Verified digital retail license for ${dbItem.name}.`,
+      features:
+        dbItem.features && dbItem.features.length > 0
+          ? dbItem.features
+          : ['Instant Key Delivery', 'Official Updates', '24/7 Support'],
+      priceLabel:
+        dbItem.price_label === 'Annual Price' ? 'Annual Price' : 'Retail Price',
+      price: Number(dbItem.price) || 0,
+      icon:
+        dbItem.icon === 'office' ||
+        dbItem.icon === 'shield' ||
+        dbItem.icon === 'palette' ||
+        dbItem.icon === 'code'
+          ? dbItem.icon
+          : 'monitor',
+      accentBg: 'bg-sky-50 border border-sky-100',
+      accentText: 'text-[#0284c7]',
+      isWideFeatured: false,
+    }));
+
+    const existingSkus = new Set(
+      mappedLive.map((s) => (s.sku || '').toLowerCase()),
+    );
+    const existingNames = new Set(mappedLive.map((s) => s.name.toLowerCase()));
+    const fallback = SOFTWARE_LICENSES.filter(
+      (s) =>
+        !(s.sku && existingSkus.has(s.sku.toLowerCase())) &&
+        !existingNames.has(s.name.toLowerCase()),
+    );
+
+    return [...mappedLive, ...fallback];
+  }, [liveDbSoftware]);
 
   // Engineer Chat modal state
   const [chatOpen, setChatOpen] = useState(false);
@@ -184,12 +246,12 @@ export function SoftwarePage() {
   const [chatMessages, setChatMessages] = useState([
     {
       sender: 'engineer',
-      text: 'Hello! I am a certified NextGenSolutions activation engineer. Share your Hardware ID or license SKU and I will assist you right away.',
+      text: 'Hello! I am a certified NextGenSolution activation engineer. Share your Hardware ID or license SKU and I will assist you right away.',
     },
   ]);
 
   const filteredAndSortedLicenses = useMemo(() => {
-    const filtered = SOFTWARE_LICENSES.filter((item) =>
+    const filtered = allLicenses.filter((item) =>
       selectedCategory === 'All' ? true : item.category === selectedCategory,
     );
 
@@ -209,7 +271,7 @@ export function SoftwarePage() {
         break;
     }
     return list;
-  }, [selectedCategory, sortBy]);
+  }, [allLicenses, selectedCategory, sortBy]);
 
   const handleBuyLicense = (license: SoftwareLicense) => {
     if (!user) {
@@ -221,8 +283,16 @@ export function SoftwarePage() {
       });
       return;
     }
+    const swSkuMap: Record<string, string> = {
+      'windows-11-pro': 'NGS-SW-001',
+      'microsoft-office-2024-pro': 'NGS-SW-002',
+      'kaspersky-total-security': 'NGS-SW-003',
+      'adobe-creative-cloud': 'NGS-SW-004',
+      'visual-studio-2022-enterprise': 'NGS-SW-005',
+    };
     addToCart({
       id: license.id,
+      sku: swSkuMap[license.id] || `NGS-SW-${license.id.slice(0, 4).toUpperCase()}`,
       name: license.name,
       price: license.price,
       image: '/images/cybercraft-studio.jpg',

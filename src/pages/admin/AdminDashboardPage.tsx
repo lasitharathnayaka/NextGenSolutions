@@ -22,6 +22,7 @@ import {
   ImagePlus,
   Link2,
   Mail,
+  Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isFirebaseConfigured } from '@/lib/firebase';
@@ -32,15 +33,43 @@ import {
   upsertProduct,
   type DbProduct,
 } from '@/services/productsService';
-import { createSoftwareProductWithKeys } from '@/services/softwareService';
+import {
+  createSoftwareProductWithKeys,
+  deleteSoftwareProductByBatch,
+  subscribeSoftwareProducts,
+} from '@/services/softwareService';
 import { fetchRepairBookings, updateRepairStage } from '@/services/repairsService';
 import { fetchOrders, updateOrderFulfillment } from '@/services/ordersService';
+import { CATALOG_PRODUCTS } from '@/data/catalogProducts';
+import { FEATURED_DEALS } from '@/data/featuredProducts';
 import {
   fetchNewsletterSubscribers,
   type DbSubscriber,
 } from '@/services/supportService';
+import {
+  DEFAULT_REPAIR_SERVICES,
+  deleteRepairService,
+  formatServicePriceDisplay,
+  generateNextServiceId,
+  subscribeRepairServices,
+  upsertRepairService,
+  type RepairServicePackage,
+  type ServiceDeviceScope,
+} from '@/services/repairServicesCatalog';
+import {
+  deleteProductReview,
+  subscribeAllReviews,
+  type DbProductReview,
+} from '@/services/reviewsService';
 
-type AdminTab = 'inventory' | 'vault' | 'tickets' | 'orders' | 'subscribers';
+type AdminTab =
+  | 'inventory'
+  | 'vault'
+  | 'services'
+  | 'tickets'
+  | 'orders'
+  | 'reviews'
+  | 'subscribers';
 type ConditionFilter = 'All' | 'Brand New' | 'Used - Grade A' | 'Used - Grade B';
 
 interface AdminInventoryItem {
@@ -60,6 +89,8 @@ interface AdminInventoryItem {
 interface ServiceTicketItem {
   id: string;
   customer: string;
+  customerId?: string;
+  customerAddress?: string;
   device: string;
   issue: string;
   engineer: string;
@@ -67,10 +98,22 @@ interface ServiceTicketItem {
   estimate: string;
 }
 
+interface CustomerOrderLineItem {
+  productId?: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+}
+
 interface CustomerOrderItem {
   id: string;
   customer: string;
+  customerEmail?: string;
+  shippingAddress?: string;
+  createdAt?: string;
+  productIds: string[];
   items: string;
+  orderItems?: CustomerOrderLineItem[];
   total: string;
   payment: string;
   fulfillment: 'Processing' | 'Shipped (FedEx)' | 'Delivered';
@@ -188,7 +231,7 @@ const INITIAL_VAULT_KEYS: VaultBatchItem[] = [
     product: 'Windows 11 Pro (Retail)',
     platform: 'Windows Platform',
     price: 14500,
-    batch: 'BATCH-2026-W11',
+    batch: 'NGS-SW-001',
     available: 640,
     assigned: 185,
     status: 'Healthy',
@@ -199,7 +242,7 @@ const INITIAL_VAULT_KEYS: VaultBatchItem[] = [
     product: 'Microsoft Office 2024 Pro Plus',
     platform: 'Win / Mac',
     price: 18500,
-    batch: 'BATCH-2026-OFF',
+    batch: 'NGS-SW-002',
     available: 412,
     assigned: 94,
     status: 'Healthy',
@@ -210,7 +253,7 @@ const INITIAL_VAULT_KEYS: VaultBatchItem[] = [
     product: 'Kaspersky Total Security (5-Device)',
     platform: 'Multi-Platform',
     price: 9500,
-    batch: 'BATCH-2026-KSP',
+    batch: 'NGS-SW-003',
     available: 290,
     assigned: 62,
     status: 'Healthy',
@@ -221,7 +264,7 @@ const INITIAL_VAULT_KEYS: VaultBatchItem[] = [
     product: 'Visual Studio 2022 Enterprise',
     platform: 'Windows Enterprise',
     price: 295000,
-    batch: 'BATCH-2026-VS',
+    batch: 'NGS-SW-005',
     available: 78,
     assigned: 19,
     status: 'Low Stock',
@@ -231,7 +274,7 @@ const INITIAL_VAULT_KEYS: VaultBatchItem[] = [
 
 const INITIAL_TICKETS: ServiceTicketItem[] = [
   {
-    id: 'NGS-4092',
+    id: 'NGS-ORD-4092',
     customer: 'Alex Miller',
     device: 'Dell XPS 15 9530',
     issue: 'Thermal Repaste & SSD Upgrade',
@@ -240,7 +283,7 @@ const INITIAL_TICKETS: ServiceTicketItem[] = [
     estimate: 'Rs. 13,500.00',
   },
   {
-    id: 'NGS-4098',
+    id: 'NGS-ORD-4098',
     customer: 'Priya Silva',
     device: 'MacBook Pro 14" M2',
     issue: 'USB-C Controller Diagnostics',
@@ -249,7 +292,7 @@ const INITIAL_TICKETS: ServiceTicketItem[] = [
     estimate: 'Rs. 7,500.00',
   },
   {
-    id: 'NGS-4104',
+    id: 'NGS-ORD-4104',
     customer: 'David Chen',
     device: 'Custom RTX 4080 Workstation',
     issue: 'Liquid Cooler Pump Replacement',
@@ -263,6 +306,7 @@ const INITIAL_ORDERS: CustomerOrderItem[] = [
   {
     id: 'NGS-8842',
     customer: 'Alex Miller',
+    productIds: ['NGS-8842'],
     items: 'Dell XPS 15 Creator Edition',
     total: 'Rs. 449,000.00',
     payment: 'Paid',
@@ -271,6 +315,7 @@ const INITIAL_ORDERS: CustomerOrderItem[] = [
   {
     id: 'NGS-8845',
     customer: 'Nadia Fernando',
+    productIds: ['NGS-8810'],
     items: 'Kingston Fury Beast 32GB DDR5 × 2',
     total: 'Rs. 77,000.00',
     payment: 'Paid',
@@ -279,6 +324,7 @@ const INITIAL_ORDERS: CustomerOrderItem[] = [
   {
     id: 'NGS-8710',
     customer: 'Alex Miller',
+    productIds: ['NGS-7721'],
     items: 'Samsung 990 PRO 2TB NVMe',
     total: 'Rs. 56,500.00',
     payment: 'Paid',
@@ -307,7 +353,292 @@ export function AdminDashboardPage() {
   const [vaultBatches, setVaultBatches] = useState<VaultBatchItem[]>(INITIAL_VAULT_KEYS);
   const [tickets, setTickets] = useState<ServiceTicketItem[]>(INITIAL_TICKETS);
   const [orders, setOrders] = useState<CustomerOrderItem[]>(INITIAL_ORDERS);
+  const [orderStatusFilter, setOrderStatusFilter] = useState<
+    'All' | CustomerOrderItem['fulfillment']
+  >('All');
+  const [orderIdSearch, setOrderIdSearch] = useState('');
+  const [productIdSearch, setProductIdSearch] = useState('');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [subscribers, setSubscribers] = useState<DbSubscriber[]>([]);
+
+  // Repair Services Catalog (Admin-controlled sub-parts with auto-generated Service IDs)
+  const [repairServices, setRepairServices] = useState<RepairServicePackage[]>(
+    DEFAULT_REPAIR_SERVICES,
+  );
+  const [serviceIdSearch, setServiceIdSearch] = useState('');
+  const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  const [editingService, setEditingService] =
+    useState<RepairServicePackage | null>(null);
+  const [srvId, setSrvId] = useState('');
+  const [srvName, setSrvName] = useState('');
+  const [srvDesc, setSrvDesc] = useState('');
+  const [srvPrice, setSrvPrice] = useState('');
+  const [srvPlusParts, setSrvPlusParts] = useState(false);
+  const [srvTurnaround, setSrvTurnaround] = useState('');
+  const [srvScope, setSrvScope] = useState<ServiceDeviceScope>('All Devices');
+  const [srvActive, setSrvActive] = useState(true);
+  const [serviceBanner, setServiceBanner] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const unsub = subscribeSoftwareProducts((rows) => {
+      if (rows.length === 0) return;
+      const mapped: VaultBatchItem[] = rows.map((r) => {
+        const stockCount = typeof r.stock === 'number' ? r.stock : 50;
+        return {
+          id: r.id,
+          product: r.name,
+          platform: r.platform || 'Multi-Platform',
+          price: Number(r.price) || 0,
+          batch: r.batch_code || r.id,
+          available: stockCount,
+          assigned: 0,
+          status: stockCount < 100 ? 'Low Stock' : 'Healthy',
+          keys: [],
+        };
+      });
+      const liveBatches = new Set(mapped.map((m) => m.batch.toLowerCase()));
+      setVaultBatches([
+        ...mapped,
+        ...INITIAL_VAULT_KEYS.filter(
+          (k) => !liveBatches.has(k.batch.toLowerCase()),
+        ),
+      ]);
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribeRepairServices((list) => {
+      setRepairServices(list);
+    });
+    return unsub;
+  }, []);
+
+  const filteredRepairServices = useMemo(() => {
+    const q = serviceIdSearch.trim().toLowerCase();
+    if (!q) return repairServices;
+    return repairServices.filter(
+      (s) =>
+        s.service_id.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q),
+    );
+  }, [repairServices, serviceIdSearch]);
+
+  const openAddServiceModal = () => {
+    setEditingService(null);
+    setSrvId(generateNextServiceId(repairServices));
+    setSrvName('');
+    setSrvDesc('');
+    setSrvPrice('');
+    setSrvPlusParts(false);
+    setSrvTurnaround('');
+    setSrvScope('All Devices');
+    setSrvActive(true);
+    setServiceModalOpen(true);
+  };
+
+  const openEditServiceModal = (service: RepairServicePackage) => {
+    setEditingService(service);
+    setSrvId(service.service_id);
+    setSrvName(service.name);
+    setSrvDesc(service.description);
+    setSrvPrice(String(service.price));
+    setSrvPlusParts(service.plus_parts);
+    setSrvTurnaround(service.turnaround);
+    setSrvScope(service.device_scope);
+    setSrvActive(service.is_active);
+    setServiceModalOpen(true);
+  };
+
+  const handleSaveService = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!srvName.trim()) return;
+    const numericPrice = Math.max(0, Number(srvPrice) || 0);
+    const serviceCode = srvId.trim() || generateNextServiceId(repairServices);
+    const docId =
+      editingService?.id ??
+      srvName
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '') +
+        '-' +
+        serviceCode.toLowerCase();
+
+    const payload: RepairServicePackage = {
+      id: docId,
+      service_id: serviceCode,
+      name: srvName.trim(),
+      description:
+        srvDesc.trim() || 'Certified technician hardware & diagnostic service.',
+      price: numericPrice,
+      price_display: formatServicePriceDisplay(numericPrice, srvPlusParts),
+      plus_parts: srvPlusParts,
+      turnaround: srvTurnaround.trim() || 'Est. 24–48 Hours',
+      device_scope: srvScope,
+      is_active: srvActive,
+    };
+
+    const nextList = editingService
+      ? repairServices.map((s) => (s.id === editingService.id ? payload : s))
+      : [...repairServices, payload];
+    setRepairServices(nextList);
+    setServiceModalOpen(false);
+    setServiceBanner(null);
+
+    const { error } = await upsertRepairService(payload, repairServices);
+    if (error) {
+      setServiceBanner({
+        type: 'success',
+        text: `Service ${payload.service_id} saved locally for this browser. Publish updated firestore.rules to sync across all devices.`,
+      });
+    } else {
+      setServiceBanner({
+        type: 'success',
+        text: `Service ${payload.service_id} ("${payload.name}") saved and synced to Book Repair.`,
+      });
+    }
+  };
+
+  const handleToggleServiceActive = async (service: RepairServicePackage) => {
+    const updated: RepairServicePackage = {
+      ...service,
+      is_active: !service.is_active,
+    };
+    setRepairServices((prev) =>
+      prev.map((s) => (s.id === service.id ? updated : s)),
+    );
+    await upsertRepairService(updated, repairServices);
+  };
+
+  const handleDeleteService = async (service: RepairServicePackage) => {
+    setRepairServices((prev) => prev.filter((s) => s.id !== service.id));
+    await deleteRepairService(service.id, repairServices);
+  };
+
+  // Customer Reviews Moderation
+  const [customerReviews, setCustomerReviews] = useState<DbProductReview[]>([]);
+  const [reviewSearch, setReviewSearch] = useState('');
+  const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null);
+  const [reviewBanner, setReviewBanner] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const unsub = subscribeAllReviews((rows) => {
+      setCustomerReviews(rows);
+    });
+    return unsub;
+  }, []);
+
+  const filteredReviews = useMemo(() => {
+    const q = reviewSearch.trim().toLowerCase();
+    if (!q) return customerReviews;
+    return customerReviews.filter(
+      (r) =>
+        r.product_sku.toLowerCase().includes(q) ||
+        r.product_name.toLowerCase().includes(q) ||
+        r.author.toLowerCase().includes(q) ||
+        r.comment.toLowerCase().includes(q),
+    );
+  }, [customerReviews, reviewSearch]);
+
+  const handleDeleteReview = async (review: DbProductReview) => {
+    setReviewBanner(null);
+    setDeletingReviewId(review.id);
+    setCustomerReviews((prev) => prev.filter((r) => r.id !== review.id));
+    const { error } = await deleteProductReview(review.id);
+    setDeletingReviewId(null);
+    if (error) {
+      setCustomerReviews((prev) => [review, ...prev]);
+      setReviewBanner({
+        type: 'error',
+        text: `Failed to delete review by ${review.author}: ${error}`,
+      });
+    } else {
+      setReviewBanner({
+        type: 'success',
+        text: `Deleted review by ${review.author} on ${review.product_name}.`,
+      });
+    }
+  };
+
+  const filteredOrders = useMemo(() => {
+    const swMap: Record<string, string> = {
+      'windows 11 pro': 'NGS-SW-001',
+      'microsoft office 2024 pro plus': 'NGS-SW-002',
+      'kaspersky total security': 'NGS-SW-003',
+      'adobe creative cloud suite': 'NGS-SW-004',
+      'visual studio 2022 enterprise': 'NGS-SW-005',
+      'cybercraft pro studio': 'NGS-SW-006',
+    };
+
+    const enriched = orders.map((order) => {
+      if (order.productIds.length > 0) return order;
+      const itemNames = order.items
+        .split(',')
+        .map((part) => part.split('×')[0].split(' (')[0].trim().toLowerCase())
+        .filter(Boolean);
+
+      const matchedIds = itemNames
+        .map((cleanName) => {
+          const liveInvMatch = inventory.find(
+            (p) =>
+              p.name.toLowerCase() === cleanName ||
+              cleanName.includes(p.name.toLowerCase()) ||
+              p.name.toLowerCase().includes(cleanName),
+          );
+          if (liveInvMatch) return liveInvMatch.sku;
+
+          const featMatch = FEATURED_DEALS.find(
+            (p) =>
+              p.name.toLowerCase() === cleanName ||
+              cleanName.includes(p.name.toLowerCase()),
+          );
+          if (featMatch) return featMatch.sku;
+
+          const catalogMatch = CATALOG_PRODUCTS.find(
+            (p) =>
+              p.name.toLowerCase() === cleanName ||
+              cleanName.includes(p.name.toLowerCase()),
+          );
+          if (catalogMatch) return catalogMatch.sku;
+
+          const swEntry = Object.entries(swMap).find(([k]) =>
+            cleanName.includes(k),
+          );
+          if (swEntry) return swEntry[1];
+
+          return null;
+        })
+        .filter((id): id is string => Boolean(id));
+
+      return { ...order, productIds: Array.from(new Set(matchedIds)) };
+    });
+
+    const orderQuery = orderIdSearch.trim().replace(/^#/, '').toLowerCase();
+    const productQuery = productIdSearch.trim().toLowerCase();
+
+    return enriched.filter((o) => {
+      if (orderStatusFilter !== 'All' && o.fulfillment !== orderStatusFilter) {
+        return false;
+      }
+      if (orderQuery && !o.id.toLowerCase().includes(orderQuery)) {
+        return false;
+      }
+      if (
+        productQuery &&
+        !o.productIds.some((pid) => pid.toLowerCase().includes(productQuery))
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [orders, inventory, orderStatusFilter, orderIdSearch, productIdSearch]);
 
   // Sync live data from Supabase when .env credentials are configured
   useEffect(() => {
@@ -339,6 +670,8 @@ export function AdminDashboardPage() {
           rows.map((r) => ({
             id: r.ticket_number,
             customer: r.customer_name ?? 'Customer',
+            customerId: r.customer_id ?? undefined,
+            customerAddress: r.customer_address ?? undefined,
             device: r.brand_model,
             issue: r.service_package,
             engineer: r.lead_engineer,
@@ -352,17 +685,53 @@ export function AdminDashboardPage() {
     fetchOrders().then((rows) => {
       if (rows && rows.length > 0) {
         setOrders(
-          rows.map((r) => ({
-            id: r.order_number,
-            customer: r.customer_name,
-            items:
-              r.order_items?.map((i) => `${i.item_name} × ${i.quantity}`).join(', ') ||
-              'Hardware Order',
-            total: `Rs. ${Number(r.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-            payment: r.payment_status,
-            fulfillment:
-              r.fulfillment_status === 'Cancelled' ? 'Processing' : r.fulfillment_status,
-          })),
+          rows.map((r) => {
+            const resolvedProductIds =
+              r.order_items
+                ?.map((i) => {
+                  if (i.product_id) return i.product_id;
+                  const cleanName = i.item_name.split(' (')[0].trim().toLowerCase();
+                  const catalogMatch = CATALOG_PRODUCTS.find(
+                    (p) =>
+                      p.name.toLowerCase() === cleanName ||
+                      cleanName.includes(p.name.toLowerCase()) ||
+                      p.name.toLowerCase().includes(cleanName),
+                  );
+                  if (catalogMatch) return catalogMatch.sku;
+                  const invMatch = INITIAL_INVENTORY.find(
+                    (p) =>
+                      p.name.toLowerCase() === cleanName ||
+                      cleanName.includes(p.name.toLowerCase()),
+                  );
+                  if (invMatch) return invMatch.sku;
+                  return null;
+                })
+                .filter((id): id is string => Boolean(id)) ?? [];
+
+            return {
+              id: r.order_number,
+              customer: r.customer_name,
+              customerEmail: r.customer_email,
+              shippingAddress: r.shipping_address,
+              createdAt: r.created_at?.toDate
+                ? r.created_at.toDate().toLocaleString()
+                : undefined,
+              productIds: Array.from(new Set(resolvedProductIds)),
+              items:
+                r.order_items?.map((i) => `${i.item_name} × ${i.quantity}`).join(', ') ||
+                'Hardware Order',
+              orderItems: r.order_items?.map((i) => ({
+                productId: i.product_id ?? undefined,
+                name: i.item_name,
+                quantity: i.quantity,
+                unitPrice: Number(i.unit_price),
+              })),
+              total: `Rs. ${Number(r.total).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+              payment: r.payment_status,
+              fulfillment:
+                r.fulfillment_status === 'Cancelled' ? 'Processing' : r.fulfillment_status,
+            };
+          }),
         );
       }
     });
@@ -373,6 +742,7 @@ export function AdminDashboardPage() {
   }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [inventoryProductIdSearch, setInventoryProductIdSearch] = useState('');
   const [conditionFilter, setConditionFilter] = useState<ConditionFilter>('All');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [currentPage, setCurrentPage] = useState(1);
@@ -396,19 +766,24 @@ export function AdminDashboardPage() {
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [isDragging, setIsDragging] = useState(false);
 
-  // Add Software & Keys Modal State
+  // Add Software & Stock Modal State
+  const [softwareProductIdSearch, setSoftwareProductIdSearch] = useState('');
   const [softwareModalOpen, setSoftwareModalOpen] = useState(false);
   const [targetBatchId, setTargetBatchId] = useState<string | null>(null);
   const [swProductName, setSwProductName] = useState('');
   const [swPlatform, setSwPlatform] = useState('Windows Platform');
-  const [swPrice, setSwPrice] = useState('199');
+  const [swPrice, setSwPrice] = useState('14500');
   const [swBatchCode, setSwBatchCode] = useState('');
-  const [swKeysInput, setSwKeysInput] = useState('');
+  const [swStockQty, setSwStockQty] = useState('50');
 
   const filteredInventory = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
+    const pidQ = inventoryProductIdSearch.trim().toLowerCase();
     return inventory.filter((item) => {
       if (conditionFilter !== 'All' && item.condition !== conditionFilter) {
+        return false;
+      }
+      if (pidQ && !item.sku.toLowerCase().includes(pidQ)) {
         return false;
       }
       if (!q) return true;
@@ -420,7 +795,7 @@ export function AdminDashboardPage() {
         item.category.toLowerCase().includes(q)
       );
     });
-  }, [inventory, searchQuery, conditionFilter]);
+  }, [inventory, searchQuery, inventoryProductIdSearch, conditionFilter]);
 
   const totalPages = Math.max(
     1,
@@ -443,14 +818,24 @@ export function AdminDashboardPage() {
     [vaultBatches],
   );
 
-  const parsedNewKeys = useMemo(
-    () =>
-      swKeysInput
-        .split(/[\n,]+/)
-        .map((k) => k.trim())
-        .filter(Boolean),
-    [swKeysInput],
-  );
+  const filteredVaultBatches = useMemo(() => {
+    const q = softwareProductIdSearch.trim().toLowerCase();
+    if (!q) return vaultBatches;
+    return vaultBatches.filter((b) => b.batch.toLowerCase().includes(q));
+  }, [vaultBatches, softwareProductIdSearch]);
+
+  const generateNextSoftwareId = (existing: VaultBatchItem[]): string => {
+    const pattern = /^NGS-SW-(\d+)$/i;
+    let maxNum = 6; // NGS-SW-001..006 reserved for default software catalog
+    for (const item of existing) {
+      const m = item.batch.trim().match(pattern);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (!Number.isNaN(n) && n > maxNum) maxNum = n;
+      }
+    }
+    return `NGS-SW-${String(maxNum + 1).padStart(3, '0')}`;
+  };
 
   const openAddSoftwareModal = (existingBatch?: VaultBatchItem) => {
     if (existingBatch) {
@@ -459,28 +844,40 @@ export function AdminDashboardPage() {
       setSwPlatform(existingBatch.platform);
       setSwPrice(String(existingBatch.price));
       setSwBatchCode(existingBatch.batch);
+      setSwStockQty('');
     } else {
       setTargetBatchId(null);
       setSwProductName('');
-      setSwPlatform('Windows Platform');
-      setSwPrice('199');
-      setSwBatchCode(`BATCH-2026-${Math.floor(100 + Math.random() * 900)}`);
+      setSwPlatform('');
+      setSwPrice('');
+      setSwBatchCode(generateNextSoftwareId(vaultBatches));
+      setSwStockQty('');
     }
-    setSwKeysInput('');
     setSoftwareModalOpen(true);
+  };
+
+  const handleDeleteSoftwareBatch = async (row: VaultBatchItem) => {
+    setVaultBatches((prev) => prev.filter((b) => b.id !== row.id));
+    await deleteSoftwareProductByBatch(row.batch);
   };
 
   const handleSaveSoftwareKeys = async (e: FormEvent) => {
     e.preventDefault();
-    if (!swProductName.trim() || parsedNewKeys.length === 0) return;
+    const qty = Math.max(0, Math.floor(Number(swStockQty) || 0));
+    if (!swProductName.trim() || qty <= 0) return;
+
+    const productId = swBatchCode.trim() || generateNextSoftwareId(vaultBatches);
 
     if (!targetBatchId && isFirebaseConfigured) {
       await createSoftwareProductWithKeys({
         name: swProductName.trim(),
         platform: swPlatform.trim() || 'Multi-Platform',
         price: Math.max(0, Number(swPrice) || 0),
-        batch_code: swBatchCode.trim() || `BATCH-${Date.now()}`,
-        keys: parsedNewKeys,
+        batch_code: productId,
+        keys: Array.from(
+          { length: Math.min(qty, 200) },
+          (_, idx) => `${productId}-${String(idx + 1).padStart(3, '0')}`,
+        ),
       });
     }
 
@@ -488,27 +885,25 @@ export function AdminDashboardPage() {
       setVaultBatches((prev) =>
         prev.map((b) => {
           if (b.id !== targetBatchId) return b;
-          const nextAvailable = b.available + parsedNewKeys.length;
+          const nextAvailable = b.available + qty;
           return {
             ...b,
             available: nextAvailable,
             status: nextAvailable < 100 ? 'Low Stock' : 'Healthy',
-            keys: [...b.keys, ...parsedNewKeys],
           };
         }),
       );
     } else {
-      const nextAvailable = parsedNewKeys.length;
       const newBatch: VaultBatchItem = {
         id: `vk-${Date.now()}`,
         product: swProductName.trim(),
         platform: swPlatform.trim() || 'Multi-Platform',
         price: Math.max(0, Number(swPrice) || 0),
-        batch: swBatchCode.trim() || `BATCH-${Date.now()}`,
-        available: nextAvailable,
+        batch: productId,
+        available: qty,
         assigned: 0,
-        status: nextAvailable < 100 ? 'Low Stock' : 'Healthy',
-        keys: parsedNewKeys,
+        status: qty < 100 ? 'Low Stock' : 'Healthy',
+        keys: [],
       };
       setVaultBatches((prev) => [newBatch, ...prev]);
     }
@@ -741,10 +1136,20 @@ export function AdminDashboardPage() {
   };
 
   const [savingTicketId, setSavingTicketId] = useState<string | null>(null);
+  const [ticketOrderIdSearch, setTicketOrderIdSearch] = useState('');
   const [ticketStatusBanner, setTicketStatusBanner] = useState<{
     type: 'success' | 'error';
     text: string;
   } | null>(null);
+
+  const filteredTickets = useMemo(() => {
+    const q = ticketOrderIdSearch.trim().replace(/^#/, '').toLowerCase();
+    if (!q) return tickets;
+    return tickets.filter((t) => {
+      const displayId = t.id.replace(/^NGS-REP-/i, 'NGS-ORD-').toLowerCase();
+      return displayId.includes(q) || t.id.toLowerCase().includes(q);
+    });
+  }, [tickets, ticketOrderIdSearch]);
 
   const handleTicketStageChange = async (
     id: string,
@@ -768,12 +1173,12 @@ export function AdminDashboardPage() {
       );
       setTicketStatusBanner({
         type: 'error',
-        text: `Failed to update ticket #${id}: ${error}`,
+        text: `Failed to update order #${id.replace(/^NGS-REP-/i, 'NGS-ORD-')}: ${error}`,
       });
     } else {
       setTicketStatusBanner({
         type: 'success',
-        text: `Repair ticket #${id} updated to "${nextStageValue}" and synced to customer dashboard.`,
+        text: `Repair order #${id.replace(/^NGS-REP-/i, 'NGS-ORD-')} updated to "${nextStageValue}" and synced to customer dashboard.`,
       });
     }
   };
@@ -1050,6 +1455,30 @@ export function AdminDashboardPage() {
 
           <button
             type="button"
+            onClick={() => setActiveTab('services')}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition cursor-pointer',
+              activeTab === 'services'
+                ? 'bg-[#0284c7] text-white shadow-xs'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900',
+            )}
+          >
+            <Wrench className="h-3.5 w-3.5" />
+            <span>Services</span>
+            <span
+              className={cn(
+                'rounded-full px-1.5 py-0.5 text-[10px] font-bold',
+                activeTab === 'services'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-slate-100 text-slate-600',
+              )}
+            >
+              {repairServices.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('tickets')}
             className={cn(
               'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition cursor-pointer',
@@ -1074,6 +1503,30 @@ export function AdminDashboardPage() {
           >
             <ShoppingCart className="h-3.5 w-3.5" />
             <span>Customer Orders</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('reviews')}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition cursor-pointer',
+              activeTab === 'reviews'
+                ? 'bg-[#0284c7] text-white shadow-xs'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900',
+            )}
+          >
+            <Star className="h-3.5 w-3.5" />
+            <span>Reviews</span>
+            <span
+              className={cn(
+                'rounded-full px-1.5 py-0.5 text-[10px] font-bold',
+                activeTab === 'reviews'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-slate-100 text-slate-600',
+              )}
+            >
+              {customerReviews.length}
+            </span>
           </button>
 
           <button
@@ -1107,7 +1560,40 @@ export function AdminDashboardPage() {
             {/* Toolbar */}
             <div className="flex flex-col justify-between gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center">
               <div className="flex flex-1 flex-wrap items-center gap-3">
-                <div className="relative w-full max-w-xs">
+                {/* Product ID Search (same compact sm:w-56 width & PID badge as Customer Orders) */}
+                <div className="relative flex w-full items-center sm:w-56">
+                  <span className="pointer-events-none absolute left-2 flex h-5 items-center rounded bg-emerald-50 px-1.5 font-mono text-[10px] font-bold text-emerald-700">
+                    PID
+                  </span>
+                  <input
+                    type="text"
+                    aria-label="Search Inventory by Product ID"
+                    value={inventoryProductIdSearch}
+                    onChange={(e) => {
+                      setInventoryProductIdSearch(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    placeholder="NGS-LAP-001"
+                    className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-12 pr-7 font-mono text-xs text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                  {inventoryProductIdSearch ? (
+                    <button
+                      type="button"
+                      aria-label="Clear Product ID search"
+                      onClick={() => {
+                        setInventoryProductIdSearch('');
+                        setCurrentPage(1);
+                      }}
+                      className="absolute right-2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : (
+                    <Search className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-slate-300" />
+                  )}
+                </div>
+
+                <div className="relative w-full sm:w-56">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
@@ -1116,9 +1602,22 @@ export function AdminDashboardPage() {
                       setSearchQuery(e.target.value);
                       setCurrentPage(1);
                     }}
-                    placeholder="Search SKU, serial number, or product name..."
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-2 pl-8.5 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    placeholder="Search name or serial..."
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/70 py-2 pl-8.5 pr-7 text-xs text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      aria-label="Clear search"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setCurrentPage(1);
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 <select
@@ -1194,10 +1693,11 @@ export function AdminDashboardPage() {
                 <table className="w-full min-w-[940px] text-left text-xs">
                   <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      <th className="px-5 py-3">Thumbnail &amp; Product Name</th>
+                      <th className="px-5 py-3">Product ID</th>
+                      <th className="px-4 py-3">Thumbnail &amp; Product Name</th>
                       <th className="px-4 py-3">Category</th>
                       <th className="px-4 py-3">Condition</th>
-                      <th className="px-4 py-3">Serial / SKU</th>
+                      <th className="px-4 py-3">Serial Number</th>
                       <th className="px-4 py-3">Stock &amp; Availability</th>
                       <th className="px-4 py-3">Price</th>
                       <th className="px-4 py-3">Warranty</th>
@@ -1214,7 +1714,12 @@ export function AdminDashboardPage() {
                           key={item.id}
                           className="hover:bg-slate-50/70 transition"
                         >
-                          <td className="px-5 py-3.5">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
+                            <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-700">
+                              {item.sku}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5">
                             <div className="flex items-center gap-3">
                               <img
                                 src={item.image}
@@ -1246,13 +1751,8 @@ export function AdminDashboardPage() {
                               {item.condition}
                             </span>
                           </td>
-                          <td className="px-4 py-3.5">
-                            <p className="font-mono font-semibold text-slate-700">
-                              {item.sku}
-                            </p>
-                            <p className="font-mono text-[10px] text-slate-400">
-                              S/N: {item.serial}
-                            </p>
+                          <td className="px-4 py-3.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                            {item.serial}
                           </td>
                           <td className="px-4 py-3.5">
                             <div className="flex flex-col items-start gap-1.5">
@@ -1354,7 +1854,7 @@ export function AdminDashboardPage() {
                           {item.name}
                         </p>
                         <p className="truncate text-[11px] text-slate-400">
-                          SKU: {item.sku} · {item.category}
+                          ID: {item.sku} · {item.category}
                         </p>
                       </div>
                     </div>
@@ -1469,7 +1969,7 @@ export function AdminDashboardPage() {
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-3 py-1.5 text-[11px] font-bold text-[#0284c7]">
                   <Sparkles className="h-3 w-3" />
-                  <span>{totalVaultKeys.toLocaleString('en-US')} Keys Ready</span>
+                  <span>{totalVaultKeys.toLocaleString('en-US')} Units in Stock</span>
                 </span>
                 <button
                   type="button"
@@ -1477,40 +1977,87 @@ export function AdminDashboardPage() {
                   className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:from-[#0369a1] hover:to-[#0284c7] transition cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  <span>Add Software &amp; Keys</span>
+                  <span>Add Software</span>
                 </button>
               </div>
+            </div>
+
+            {/* Product ID Search Bar */}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="relative flex w-full items-center sm:w-56">
+                <span className="pointer-events-none absolute left-2 flex h-5 items-center rounded bg-emerald-50 px-1.5 font-mono text-[10px] font-bold text-emerald-700">
+                  PID
+                </span>
+                <input
+                  type="text"
+                  aria-label="Search Software by Product ID"
+                  value={softwareProductIdSearch}
+                  onChange={(e) => setSoftwareProductIdSearch(e.target.value)}
+                  placeholder="NGS-SW-001"
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-12 pr-7 font-mono text-xs text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+                {softwareProductIdSearch ? (
+                  <button
+                    type="button"
+                    aria-label="Clear Product ID search"
+                    onClick={() => setSoftwareProductIdSearch('')}
+                    className="absolute right-2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : (
+                  <Search className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-slate-300" />
+                )}
+              </div>
+
+              <span className="text-[11px] font-medium text-slate-400">
+                Showing {filteredVaultBatches.length} of {vaultBatches.length}{' '}
+                products
+              </span>
             </div>
 
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <th className="px-4 py-3">Product ID</th>
                     <th className="px-4 py-3">Software Product</th>
-                    <th className="px-4 py-3">Batch ID</th>
-                    <th className="px-4 py-3">Available Keys</th>
-                    <th className="px-4 py-3">Assigned</th>
+                    <th className="px-4 py-3">Stock</th>
+                    <th className="px-4 py-3">Sold</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {vaultBatches.map((row) => (
+                  {filteredVaultBatches.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-4 py-10 text-center text-xs text-slate-400"
+                      >
+                        No software products match Product ID &ldquo;
+                        {softwareProductIdSearch}&rdquo;.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredVaultBatches.map((row) => (
                     <tr key={row.id} className="hover:bg-slate-50/60">
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-700">
+                          {row.batch}
+                        </span>
+                      </td>
                       <td className="px-4 py-3.5">
                         <p className="font-bold text-slate-900">{row.product}</p>
                         <p className="text-[11px] text-slate-400">
                           {row.platform} · Rs. {row.price.toFixed(2)}
                         </p>
                       </td>
-                      <td className="px-4 py-3.5 font-mono text-slate-500">
-                        {row.batch}
-                      </td>
                       <td className="px-4 py-3.5 font-bold text-[#0284c7]">
-                        {row.available} keys
+                        {row.available} units
                       </td>
                       <td className="px-4 py-3.5 text-slate-600">
-                        {row.assigned} keys
+                        {row.assigned} units
                       </td>
                       <td className="px-4 py-3.5">
                         <span
@@ -1524,18 +2071,202 @@ export function AdminDashboardPage() {
                           {row.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <button
-                          type="button"
-                          onClick={() => openAddSoftwareModal(row)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-sky-300 hover:text-[#0284c7] transition cursor-pointer"
-                        >
-                          <Plus className="h-3 w-3" />
-                          <span>Add Keys</span>
-                        </button>
+                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => openAddSoftwareModal(row)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:border-sky-300 hover:text-[#0284c7] transition cursor-pointer"
+                          >
+                            <Plus className="h-3 w-3" />
+                            <span>Add Stock</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSoftwareBatch(row)}
+                            aria-label={`Delete ${row.product}`}
+                            title={`Delete ${row.product}`}
+                            className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2.5: Services Catalog */}
+        {activeTab === 'services' && (
+          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  Repair &amp; Technical Service Packages
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Manage sub-part services, pricing, and availability shown on
+                  the Book a Repair page.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openAddServiceModal}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:from-[#0369a1] hover:to-[#0284c7] transition cursor-pointer self-start sm:self-auto"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Add Service</span>
+              </button>
+            </div>
+
+            {/* Compact Service ID Search Bar */}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="relative flex w-full items-center sm:w-56">
+                <span className="pointer-events-none absolute left-2 flex h-5 items-center rounded bg-sky-50 px-1.5 font-mono text-[10px] font-bold text-[#0284c7]">
+                  SRV
+                </span>
+                <input
+                  type="text"
+                  aria-label="Search Services by Service ID"
+                  value={serviceIdSearch}
+                  onChange={(e) => setServiceIdSearch(e.target.value)}
+                  placeholder="NGS-SRV-001"
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-13 pr-7 font-mono text-xs text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:border-[#0284c7] focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                />
+                {serviceIdSearch ? (
+                  <button
+                    type="button"
+                    aria-label="Clear Service ID search"
+                    onClick={() => setServiceIdSearch('')}
+                    className="absolute right-2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : (
+                  <Search className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-slate-300" />
+                )}
+              </div>
+
+              <span className="text-[11px] font-medium text-slate-400">
+                Showing {filteredRepairServices.length} of{' '}
+                {repairServices.length} services
+              </span>
+            </div>
+
+            {serviceBanner && (
+              <div
+                className={cn(
+                  'mt-4 rounded-xl border px-4 py-2.5 text-xs font-semibold',
+                  serviceBanner.type === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-rose-200 bg-rose-50 text-rose-700',
+                )}
+              >
+                {serviceBanner.text}
+              </div>
+            )}
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <th className="px-4 py-3">Service ID</th>
+                    <th className="px-4 py-3">Service Package</th>
+                    <th className="px-4 py-3">Device Scope</th>
+                    <th className="px-4 py-3">Price</th>
+                    <th className="px-4 py-3">Turnaround</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredRepairServices.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="px-4 py-10 text-center text-xs text-slate-400"
+                      >
+                        No services match &ldquo;{serviceIdSearch}&rdquo;.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRepairServices.map((srv) => (
+                      <tr key={srv.id} className="hover:bg-slate-50/60">
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-900">
+                            {srv.service_id}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <p className="font-bold text-slate-900">{srv.name}</p>
+                          <p className="text-[11px] text-slate-400">
+                            {srv.description}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-600 whitespace-nowrap">
+                          {srv.device_scope}
+                        </td>
+                        <td className="px-4 py-3.5 font-bold text-slate-900 whitespace-nowrap">
+                          {srv.price_display}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap">
+                          {srv.turnaround}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleServiceActive(srv)}
+                            title={
+                              srv.is_active
+                                ? 'Click to hide from Book Repair'
+                                : 'Click to show on Book Repair'
+                            }
+                            className={cn(
+                              'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold transition cursor-pointer',
+                              srv.is_active
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                : 'border-slate-200 bg-slate-100 text-slate-500 hover:bg-slate-200',
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                'h-1.5 w-1.5 rounded-full',
+                                srv.is_active
+                                  ? 'bg-emerald-500'
+                                  : 'bg-slate-400',
+                              )}
+                            />
+                            <span>{srv.is_active ? 'Active' : 'Hidden'}</span>
+                          </button>
+                        </td>
+                        <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => openEditServiceModal(srv)}
+                              aria-label={`Edit ${srv.name}`}
+                              className="rounded-lg p-1.5 text-slate-400 hover:bg-sky-50 hover:text-[#0284c7] transition cursor-pointer"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteService(srv)}
+                              aria-label={`Delete ${srv.name}`}
+                              className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition cursor-pointer"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1556,6 +2287,39 @@ export function AdminDashboardPage() {
               </div>
             </div>
 
+            {/* Order ID Search Bar */}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="relative flex w-full items-center sm:w-56">
+                <span className="pointer-events-none absolute left-2 flex h-5 items-center rounded bg-sky-50 px-1.5 font-mono text-[10px] font-bold text-[#0284c7]">
+                  #ORD
+                </span>
+                <input
+                  type="text"
+                  aria-label="Search Repair Queue by Order ID"
+                  value={ticketOrderIdSearch}
+                  onChange={(e) => setTicketOrderIdSearch(e.target.value)}
+                  placeholder="NGS-ORD-1711"
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-14 pr-7 font-mono text-xs text-slate-900 placeholder:font-sans placeholder:text-slate-400 focus:border-[#0284c7] focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                />
+                {ticketOrderIdSearch ? (
+                  <button
+                    type="button"
+                    aria-label="Clear Order ID search"
+                    onClick={() => setTicketOrderIdSearch('')}
+                    className="absolute right-2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : (
+                  <Search className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-slate-300" />
+                )}
+              </div>
+
+              <span className="text-[11px] font-medium text-slate-400">
+                Showing {filteredTickets.length} of {tickets.length} orders
+              </span>
+            </div>
+
             {ticketStatusBanner && (
               <div
                 className={cn(
@@ -1573,7 +2337,7 @@ export function AdminDashboardPage() {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    <th className="px-4 py-3">Ticket</th>
+                    <th className="px-4 py-3">Order ID</th>
                     <th className="px-4 py-3">Customer</th>
                     <th className="px-4 py-3">Device &amp; Issue</th>
                     <th className="px-4 py-3">Lead Engineer</th>
@@ -1583,13 +2347,43 @@ export function AdminDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {tickets.map((t) => (
-                    <tr key={t.id} className="hover:bg-slate-50/60">
-                      <td className="px-4 py-3.5 font-mono font-bold text-[#0284c7]">
-                        #{t.id}
+                  {filteredTickets.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="px-4 py-10 text-center text-xs text-slate-400"
+                      >
+                        No repair orders match Order ID &ldquo;
+                        {ticketOrderIdSearch}&rdquo;.
                       </td>
-                      <td className="px-4 py-3.5 font-semibold text-slate-900">
-                        {t.customer}
+                    </tr>
+                  ) : (
+                    filteredTickets.map((t) => {
+                      const displayOrderId = t.id.replace(
+                        /^NGS-REP-/i,
+                        'NGS-ORD-',
+                      );
+                      return (
+                        <tr key={t.id} className="hover:bg-slate-50/60">
+                          <td className="px-4 py-3.5 whitespace-nowrap">
+                            <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-900">
+                              #{displayOrderId}
+                            </span>
+                          </td>
+                      <td className="px-4 py-3.5">
+                        <p className="font-semibold text-slate-900">
+                          {t.customer}
+                        </p>
+                        {t.customerId && (
+                          <p className="font-mono text-[10px] font-semibold text-[#0284c7]">
+                            ID: {t.customerId}
+                          </p>
+                        )}
+                        {t.customerAddress && (
+                          <p className="mt-0.5 text-[10px] text-slate-400">
+                            {t.customerAddress}
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-3.5">
                         <p className="font-semibold text-slate-800">
@@ -1617,7 +2411,10 @@ export function AdminDashboardPage() {
                       <td className="px-4 py-3.5 font-bold text-slate-900">
                         {t.estimate}
                       </td>
-                      <td className="px-4 py-3.5 text-right">
+                      <td
+                        className="px-4 py-3.5 text-right"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <select
                           aria-label={`Update repair stage for ticket ${t.id}`}
                           value={t.stage}
@@ -1640,7 +2437,9 @@ export function AdminDashboardPage() {
                         </select>
                       </td>
                     </tr>
-                  ))}
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1650,13 +2449,166 @@ export function AdminDashboardPage() {
         {/* Tab 4: Customer Orders */}
         {activeTab === 'orders' && (
           <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">
-                Recent Customer Orders
-              </h2>
-              <p className="text-xs text-slate-400">
-                Track payment status and update order fulfillment stages directly.
-              </p>
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  Recent Customer Orders
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Track payment status and update order fulfillment stages directly.
+                </p>
+              </div>
+
+              {/* Fulfillment Status Filter Pills */}
+              <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-slate-200/80 bg-slate-50 p-1">
+                {(
+                  [
+                    { value: 'All', label: 'All' },
+                    { value: 'Processing', label: 'Processing' },
+                    { value: 'Shipped (FedEx)', label: 'Shipped' },
+                    { value: 'Delivered', label: 'Delivered' },
+                  ] as const
+                ).map((opt) => {
+                  const count =
+                    opt.value === 'All'
+                      ? orders.length
+                      : orders.filter((o) => o.fulfillment === opt.value).length;
+                  const isActive = orderStatusFilter === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setOrderStatusFilter(opt.value)}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition cursor-pointer',
+                        isActive
+                          ? opt.value === 'Delivered'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : opt.value === 'Processing'
+                              ? 'bg-amber-500 text-white shadow-xs'
+                              : 'bg-[#0284c7] text-white shadow-xs'
+                          : 'text-slate-600 hover:bg-white hover:text-slate-900',
+                      )}
+                    >
+                      <span>{opt.label}</span>
+                      <span
+                        className={cn(
+                          'rounded-full px-1.5 py-0.5 text-[10px] font-bold',
+                          isActive
+                            ? 'bg-white/20 text-white'
+                            : 'bg-slate-200/80 text-slate-600',
+                        )}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Separate Order ID & Product ID Search Bars */}
+            <div className="mt-4 flex flex-wrap items-end justify-between gap-3 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
+              <div className="flex flex-wrap items-end gap-3">
+                {/* Order ID Search */}
+                <div className="w-full space-y-1 sm:w-56">
+                  <label
+                    htmlFor="order-id-search"
+                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500"
+                  >
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#0284c7]" />
+                    <span>Order ID</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <span className="pointer-events-none absolute left-2 flex h-5 items-center rounded bg-sky-50 px-1.5 font-mono text-[10px] font-bold text-[#0284c7]">
+                      #ORD
+                    </span>
+                    <input
+                      id="order-id-search"
+                      type="text"
+                      value={orderIdSearch}
+                      onChange={(e) => setOrderIdSearch(e.target.value)}
+                      placeholder="NGS-ORD-7513"
+                      className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-14 pr-7 font-mono text-xs text-slate-900 shadow-2xs placeholder:font-sans placeholder:text-slate-400 focus:border-[#0284c7] focus:outline-none focus:ring-2 focus:ring-sky-500/20"
+                    />
+                    {orderIdSearch ? (
+                      <button
+                        type="button"
+                        aria-label="Clear Order ID search"
+                        onClick={() => setOrderIdSearch('')}
+                        className="absolute right-2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    ) : (
+                      <Search className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-slate-300" />
+                    )}
+                  </div>
+                </div>
+
+                {/* Product ID Search */}
+                <div className="w-full space-y-1 sm:w-56">
+                  <label
+                    htmlFor="product-id-search"
+                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500"
+                  >
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span>Product ID</span>
+                  </label>
+                  <div className="relative flex items-center">
+                    <span className="pointer-events-none absolute left-2 flex h-5 items-center rounded bg-emerald-50 px-1.5 font-mono text-[10px] font-bold text-emerald-700">
+                      PID
+                    </span>
+                    <input
+                      id="product-id-search"
+                      type="text"
+                      value={productIdSearch}
+                      onChange={(e) => setProductIdSearch(e.target.value)}
+                      placeholder="NGS-2231"
+                      className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-12 pr-7 font-mono text-xs text-slate-900 shadow-2xs placeholder:font-sans placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                    {productIdSearch ? (
+                      <button
+                        type="button"
+                        aria-label="Clear Product ID search"
+                        onClick={() => setProductIdSearch('')}
+                        className="absolute right-2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    ) : (
+                      <Search className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-slate-300" />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Match Count & Reset */}
+              <div className="flex items-center gap-3 pb-1">
+                <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap">
+                  Showing{' '}
+                  <strong className="font-bold text-slate-800">
+                    {filteredOrders.length}
+                  </strong>{' '}
+                  of {orders.length}
+                </span>
+                {(orderIdSearch ||
+                  productIdSearch ||
+                  orderStatusFilter !== 'All') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrderIdSearch('');
+                      setProductIdSearch('');
+                      setOrderStatusFilter('All');
+                    }}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 shadow-2xs hover:border-slate-300 hover:text-slate-900 transition cursor-pointer"
+                  >
+                    <X className="h-3 w-3" />
+                    <span>Clear</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {orderStatusBanner && (
@@ -1677,6 +2629,7 @@ export function AdminDashboardPage() {
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                     <th className="px-4 py-3">Order ID</th>
+                    <th className="px-4 py-3">Product ID</th>
                     <th className="px-4 py-3">Customer</th>
                     <th className="px-4 py-3">Items</th>
                     <th className="px-4 py-3">Total</th>
@@ -1686,10 +2639,47 @@ export function AdminDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {orders.map((o) => (
-                    <tr key={o.id} className="hover:bg-slate-50/60">
-                      <td className="px-4 py-3.5 font-mono font-bold text-slate-900">
-                        #{o.id}
+                  {filteredOrders.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-4 py-10 text-center text-xs text-slate-400"
+                      >
+                        No matching orders found
+                        {orderStatusFilter !== 'All'
+                          ? ` with status "${orderStatusFilter}"`
+                          : ''}
+                        .
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredOrders.map((o) => (
+                    <tr
+                      key={o.id}
+                      onClick={() => setSelectedOrderId(o.id)}
+                      title="Click to view ordered products & customer details"
+                      className="hover:bg-sky-50/40 transition cursor-pointer"
+                    >
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-900 hover:bg-sky-100 hover:text-[#0284c7] transition">
+                          #{o.id}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {o.productIds.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {o.productIds.map((pid) => (
+                              <span
+                                key={pid}
+                                className="inline-block whitespace-nowrap rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-700"
+                              >
+                                {pid}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="font-mono text-[11px] text-slate-400">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 font-semibold text-slate-800">
                         {o.customer}
@@ -1717,7 +2707,10 @@ export function AdminDashboardPage() {
                           {o.fulfillment}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-right">
+                      <td
+                        className="px-4 py-3.5 text-right"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <select
                           aria-label={`Update status for order ${o.id}`}
                           value={o.fulfillment}
@@ -1740,7 +2733,169 @@ export function AdminDashboardPage() {
                         </select>
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 4.5: Customer Reviews Moderation */}
+        {activeTab === 'reviews' && (
+          <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  Customer Product Reviews
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Review customer feedback and photos, and delete spam or
+                  unnecessary reviews in real time.
+                </p>
+              </div>
+              <span className="text-[11px] font-medium text-slate-400">
+                Showing {filteredReviews.length} of {customerReviews.length}{' '}
+                reviews
+              </span>
+            </div>
+
+            {/* Compact Product ID / Customer Search Bar */}
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <div className="relative flex w-full items-center sm:w-56">
+                <span className="pointer-events-none absolute left-2 flex h-5 items-center rounded bg-emerald-50 px-1.5 font-mono text-[10px] font-bold text-emerald-700">
+                  PID
+                </span>
+                <input
+                  type="text"
+                  aria-label="Search Reviews by Product ID or customer"
+                  value={reviewSearch}
+                  onChange={(e) => setReviewSearch(e.target.value)}
+                  placeholder="NGS-2231 or customer..."
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-12 pr-7 text-xs text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+                {reviewSearch ? (
+                  <button
+                    type="button"
+                    aria-label="Clear review search"
+                    onClick={() => setReviewSearch('')}
+                    className="absolute right-2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : (
+                  <Search className="pointer-events-none absolute right-2.5 h-3.5 w-3.5 text-slate-300" />
+                )}
+              </div>
+            </div>
+
+            {reviewBanner && (
+              <div
+                className={cn(
+                  'mt-4 rounded-xl border px-4 py-2.5 text-xs font-semibold',
+                  reviewBanner.type === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                    : 'border-rose-200 bg-rose-50 text-rose-700',
+                )}
+              >
+                {reviewBanner.text}
+              </div>
+            )}
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/70 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    <th className="px-4 py-3">Product ID</th>
+                    <th className="px-4 py-3">Product</th>
+                    <th className="px-4 py-3">Customer</th>
+                    <th className="px-4 py-3">Rating</th>
+                    <th className="px-4 py-3">Review &amp; Photo</th>
+                    <th className="px-4 py-3">Date</th>
+                    <th className="px-4 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredReviews.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={7}
+                        className="px-4 py-10 text-center text-xs text-slate-400"
+                      >
+                        {customerReviews.length === 0
+                          ? 'No customer-submitted reviews yet. New product reviews will appear here automatically.'
+                          : `No reviews match "${reviewSearch}".`}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredReviews.map((rev) => (
+                      <tr key={rev.id} className="hover:bg-slate-50/60">
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-700">
+                            {rev.product_sku}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 font-semibold text-slate-900">
+                          {rev.product_name}
+                        </td>
+                        <td className="px-4 py-3.5 font-medium text-slate-700 whitespace-nowrap">
+                          {rev.author}
+                        </td>
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          <div className="inline-flex items-center gap-0.5">
+                            {Array.from({ length: 5 }, (_, i) => (
+                              <Star
+                                key={i}
+                                className={cn(
+                                  'h-3.5 w-3.5',
+                                  i < rev.rating
+                                    ? 'fill-amber-400 text-amber-400'
+                                    : 'text-slate-200',
+                                )}
+                              />
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 max-w-sm">
+                          <p className="text-slate-600 line-clamp-2">
+                            {rev.comment}
+                          </p>
+                          {rev.image_url && (
+                            <a
+                              href={rev.image_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1.5 inline-block overflow-hidden rounded-lg border border-slate-200"
+                            >
+                              <img
+                                src={rev.image_url}
+                                alt={`Photo by ${rev.author}`}
+                                className="h-12 w-16 object-cover hover:opacity-85 transition"
+                              />
+                            </a>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-slate-400 whitespace-nowrap">
+                          {rev.date_label}
+                        </td>
+                        <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            disabled={deletingReviewId === rev.id}
+                            onClick={() => handleDeleteReview(rev)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-[11px] font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50 transition cursor-pointer"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>
+                              {deletingReviewId === rev.id
+                                ? 'Deleting...'
+                                : 'Delete'}
+                            </span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1830,6 +2985,428 @@ export function AdminDashboardPage() {
         )}
       </div>
 
+      {/* Customer Order Details Modal (Products Breakdown) */}
+      {(() => {
+        const activeOrder = selectedOrderId
+          ? filteredOrders.find((o) => o.id === selectedOrderId) ??
+            orders.find((o) => o.id === selectedOrderId) ??
+            null
+          : null;
+        if (!activeOrder) return null;
+
+        const swMap: Record<string, string> = {
+          'windows 11 pro': 'NGS-SW-001',
+          'microsoft office 2024 pro plus': 'NGS-SW-002',
+          'kaspersky total security': 'NGS-SW-003',
+          'adobe creative cloud suite': 'NGS-SW-004',
+          'visual studio 2022 enterprise': 'NGS-SW-005',
+          'cybercraft pro studio': 'NGS-SW-006',
+        };
+
+        const lineItems: CustomerOrderLineItem[] =
+          activeOrder.orderItems && activeOrder.orderItems.length > 0
+            ? activeOrder.orderItems
+            : activeOrder.items
+                .split(',')
+                .map((part) => {
+                  const [rawName, rawQty] = part.split('×');
+                  return {
+                    name: rawName?.trim() || 'Hardware Item',
+                    quantity: Math.max(1, parseInt(rawQty?.trim() || '1', 10) || 1),
+                    unitPrice: 0,
+                  };
+                });
+
+        const resolveItemMeta = (item: CustomerOrderLineItem) => {
+          const cleanName = item.name.split(' (')[0].trim().toLowerCase();
+          const liveInv = inventory.find(
+            (p) =>
+              (item.productId && p.sku.toLowerCase() === item.productId.toLowerCase()) ||
+              p.name.toLowerCase() === cleanName ||
+              cleanName.includes(p.name.toLowerCase()) ||
+              p.name.toLowerCase().includes(cleanName),
+          );
+          if (liveInv) {
+            return { sku: item.productId || liveInv.sku, image: liveInv.image, isSoftware: false };
+          }
+          const feat = FEATURED_DEALS.find(
+            (p) =>
+              (item.productId && p.sku.toLowerCase() === item.productId.toLowerCase()) ||
+              p.name.toLowerCase() === cleanName ||
+              cleanName.includes(p.name.toLowerCase()),
+          );
+          if (feat) {
+            return { sku: item.productId || feat.sku, image: feat.image, isSoftware: feat.category === 'software' };
+          }
+          const cat = CATALOG_PRODUCTS.find(
+            (p) =>
+              (item.productId && p.sku.toLowerCase() === item.productId.toLowerCase()) ||
+              p.name.toLowerCase() === cleanName ||
+              cleanName.includes(p.name.toLowerCase()),
+          );
+          if (cat) {
+            return { sku: item.productId || cat.sku, image: cat.image, isSoftware: false };
+          }
+          const swEntry = Object.entries(swMap).find(([k]) => cleanName.includes(k));
+          return {
+            sku: item.productId || swEntry?.[1] || null,
+            image: null,
+            isSoftware: Boolean(swEntry),
+          };
+        };
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-xs"
+            onClick={() => setSelectedOrderId(null)}
+          >
+            <div
+              className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Dark-Navy Modal Header */}
+              <div className="flex items-center justify-between bg-[#0d1726] px-6 py-4 text-white">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/20 border border-sky-400/30 text-sky-400">
+                    <ShoppingCart className="h-4.5 w-4.5" />
+                  </span>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-mono text-sm font-extrabold">
+                        Order #{activeOrder.id}
+                      </h3>
+                      <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                        {activeOrder.payment}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      {activeOrder.createdAt
+                        ? `Placed on ${activeOrder.createdAt}`
+                        : 'Customer Hardware & Software Order'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrderId(null)}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-5 overflow-y-auto p-6 text-xs">
+                {/* Customer & Delivery Info */}
+                <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200/80 bg-slate-50/70 p-4 sm:grid-cols-2">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Customer
+                    </p>
+                    <p className="mt-1 font-bold text-slate-900">
+                      {activeOrder.customer}
+                    </p>
+                    {activeOrder.customerEmail && (
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        {activeOrder.customerEmail}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Delivery Address
+                    </p>
+                    <p className="mt-1 text-slate-700">
+                      {activeOrder.shippingAddress || 'Confirmed via WhatsApp'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Ordered Products Breakdown */}
+                <div>
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      Ordered Products ({lineItems.length})
+                    </h4>
+                  </div>
+
+                  <div className="divide-y divide-slate-100 rounded-xl border border-slate-200/80 bg-white">
+                    {lineItems.map((item, idx) => {
+                      const meta = resolveItemMeta(item);
+                      const lineTotal = item.unitPrice * item.quantity;
+                      return (
+                        <div
+                          key={`${item.name}-${idx}`}
+                          className="flex items-center justify-between gap-4 p-3.5"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {meta.image ? (
+                              <img
+                                src={meta.image}
+                                alt={item.name}
+                                className="h-12 w-12 shrink-0 rounded-xl border border-slate-200 object-cover bg-slate-50"
+                              />
+                            ) : (
+                              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-200/80 bg-sky-50 text-[#0284c7]">
+                                {meta.isSoftware ? (
+                                  <KeyRound className="h-5 w-5" />
+                                ) : (
+                                  <Package className="h-5 w-5" />
+                                )}
+                              </span>
+                            )}
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <p className="font-bold text-slate-900">
+                                  {item.name}
+                                </p>
+                                {meta.sku && (
+                                  <span className="inline-block rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-700">
+                                    {meta.sku}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-0.5 text-[11px] text-slate-500">
+                                Qty: <strong className="text-slate-700">{item.quantity}</strong>
+                                {item.unitPrice > 0 && (
+                                  <>
+                                    {' · '}Unit Price: Rs.{' '}
+                                    {item.unitPrice.toLocaleString('en-US', {
+                                      minimumFractionDigits: 2,
+                                    })}
+                                  </>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+
+                          {lineTotal > 0 && (
+                            <p className="shrink-0 font-bold text-slate-900">
+                              Rs.{' '}
+                              {lineTotal.toLocaleString('en-US', {
+                                minimumFractionDigits: 2,
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Footer: Total + Direct Status Update */}
+                <div className="flex flex-col justify-between gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Order Total
+                    </p>
+                    <p className="text-lg font-extrabold text-[#0284c7]">
+                      {activeOrder.total}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <select
+                      aria-label={`Update status for order ${activeOrder.id}`}
+                      value={activeOrder.fulfillment}
+                      disabled={savingOrderId === activeOrder.id}
+                      onChange={(e) =>
+                        handleOrderStatusChange(
+                          activeOrder.id,
+                          e.target.value as CustomerOrderItem['fulfillment'],
+                        )
+                      }
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 focus:border-sky-500 focus:outline-none disabled:opacity-50 cursor-pointer"
+                    >
+                      {ORDER_STAGE_ORDER.map((stage) => (
+                        <option key={stage} value={stage}>
+                          {savingOrderId === activeOrder.id &&
+                          stage === activeOrder.fulfillment
+                            ? 'Saving...'
+                            : stage}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrderId(null)}
+                      className="rounded-xl bg-[#0284c7] px-4 py-2 font-bold text-white hover:bg-[#0369a1] transition cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Add / Edit Repair Service Modal */}
+      {serviceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between bg-[#0d1726] px-6 py-4 text-white">
+              <div className="flex items-center gap-3">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/20 border border-sky-400/30 text-sky-400">
+                  <Wrench className="h-4 w-4" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold">
+                    {editingService
+                      ? 'Edit Repair Service'
+                      : 'Add New Repair Service'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Configure service package details shown on Book a Repair.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setServiceModalOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveService} className="space-y-4 p-6 text-xs">
+              <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <label className="block font-semibold text-slate-700">
+                      Service ID
+                    </label>
+                    <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-[#0284c7]">
+                      Auto-generated
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    readOnly
+                    value={srvId}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 font-mono font-semibold text-slate-600 cursor-not-allowed focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700">
+                    Device Scope
+                  </label>
+                  <select
+                    value={srvScope}
+                    onChange={(e) =>
+                      setSrvScope(e.target.value as ServiceDeviceScope)
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none cursor-pointer"
+                  >
+                    <option value="All Devices">All Devices</option>
+                    <option value="Laptop & Notebook">Laptop &amp; Notebook</option>
+                    <option value="Desktop & Workstation">
+                      Desktop &amp; Workstation
+                    </option>
+                  </select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block font-semibold text-slate-700">
+                    Service Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={srvName}
+                    onChange={(e) => setSrvName(e.target.value)}
+                    placeholder="e.g. Motherboard Micro-Soldering & Repair"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block font-semibold text-slate-700">
+                    Description
+                  </label>
+                  <input
+                    type="text"
+                    value={srvDesc}
+                    onChange={(e) => setSrvDesc(e.target.value)}
+                    placeholder="e.g. IC replacement, power rail diagnostics, and thermal testing."
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700">
+                    Price (Rs.) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    step="1"
+                    value={srvPrice}
+                    onChange={(e) => setSrvPrice(e.target.value)}
+                    placeholder="e.g. 7500"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700">
+                    Turnaround Time
+                  </label>
+                  <input
+                    type="text"
+                    value={srvTurnaround}
+                    onChange={(e) => setSrvTurnaround(e.target.value)}
+                    placeholder="e.g. Est. 24–48 Hours"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 flex flex-wrap items-center gap-5 pt-1">
+                  <label className="inline-flex items-center gap-2 font-semibold text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={srvPlusParts}
+                      onChange={(e) => setSrvPlusParts(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-[#0284c7] focus:ring-sky-500"
+                    />
+                    <span>Show &ldquo;+ Parts&rdquo; next to price</span>
+                  </label>
+
+                  <label className="inline-flex items-center gap-2 font-semibold text-slate-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={srvActive}
+                      onChange={(e) => setSrvActive(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span>Active on Book Repair page</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setServiceModalOpen(false)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] px-5 py-2 font-bold text-white shadow-sm shadow-sky-500/20 hover:from-[#0369a1] hover:to-[#0284c7] cursor-pointer"
+                >
+                  {editingService ? 'Save Changes' : 'Publish Service'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Add Software & License Keys Modal */}
       {softwareModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-xs">
@@ -1842,12 +3419,11 @@ export function AdminDashboardPage() {
                 <div>
                   <h3 className="text-sm font-bold">
                     {targetBatchId
-                      ? 'Add License Keys to Batch'
-                      : 'Add New Software & License Keys'}
+                      ? 'Add Stock to Software Product'
+                      : 'Add New Software Product'}
                   </h3>
                   <p className="text-[11px] text-slate-400">
-                    Paste retail or OEM keys (one per line) to add them to the
-                    vault.
+                    Set software details and available stock quantity.
                   </p>
                 </div>
               </div>
@@ -1889,8 +3465,8 @@ export function AdminDashboardPage() {
                     disabled={Boolean(targetBatchId)}
                     value={swPlatform}
                     onChange={(e) => setSwPlatform(e.target.value)}
-                    placeholder="e.g. Windows / macOS"
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none disabled:opacity-70"
+                    placeholder="e.g. Windows Platform"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none disabled:opacity-70"
                   />
                 </div>
 
@@ -1900,45 +3476,46 @@ export function AdminDashboardPage() {
                   </label>
                   <input
                     type="number"
+                    required
                     min={0}
                     step="0.01"
                     disabled={Boolean(targetBatchId)}
                     value={swPrice}
                     onChange={(e) => setSwPrice(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none disabled:opacity-70"
+                    placeholder="e.g. 14500"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none disabled:opacity-70"
                   />
                 </div>
 
-                <div className="sm:col-span-2">
-                  <label className="block font-semibold text-slate-700">
-                    Batch ID
-                  </label>
-                  <input
-                    type="text"
-                    disabled={Boolean(targetBatchId)}
-                    value={swBatchCode}
-                    onChange={(e) => setSwBatchCode(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 font-mono text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none disabled:opacity-70"
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
+                <div>
                   <div className="flex items-center justify-between">
                     <label className="block font-semibold text-slate-700">
-                      License Keys (One per line or comma-separated) *
+                      Product ID
                     </label>
                     <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-[#0284c7]">
-                      {parsedNewKeys.length} key
-                      {parsedNewKeys.length !== 1 ? 's' : ''} detected
+                      Auto-generated
                     </span>
                   </div>
-                  <textarea
+                  <input
+                    type="text"
+                    readOnly
+                    value={swBatchCode}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 font-mono font-semibold text-slate-600 cursor-not-allowed focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700">
+                    {targetBatchId ? 'Add Stock Qty *' : 'Stock Qty *'}
+                  </label>
+                  <input
+                    type="number"
                     required
-                    rows={5}
-                    value={swKeysInput}
-                    onChange={(e) => setSwKeysInput(e.target.value)}
-                    placeholder={`W11P8-9K4M2-7Q9X3-89A2F\nW11P8-4H7J1-2L5M9-33B1C`}
-                    className="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 font-mono text-[11px] text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none"
+                    min={1}
+                    value={swStockQty}
+                    onChange={(e) => setSwStockQty(e.target.value)}
+                    placeholder="e.g. 50"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none"
                   />
                 </div>
               </div>
@@ -1955,7 +3532,9 @@ export function AdminDashboardPage() {
                   type="submit"
                   className="rounded-xl bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] px-5 py-2 font-bold text-white shadow-sm shadow-sky-500/20 hover:from-[#0369a1] hover:to-[#0284c7] cursor-pointer"
                 >
-                  Save {parsedNewKeys.length || ''} Keys to Vault
+                  {targetBatchId
+                    ? `Add ${Number(swStockQty) || 0} to Stock`
+                    : 'Save Software'}
                 </button>
               </div>
             </form>
@@ -2203,7 +3782,7 @@ export function AdminDashboardPage() {
                     <div>
                       <div className="flex items-center justify-between">
                         <label className="block font-semibold text-slate-700">
-                          SKU ID
+                          Product ID
                         </label>
                         <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-[#0284c7]">
                           Auto-generated

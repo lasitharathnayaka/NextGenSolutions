@@ -31,7 +31,7 @@ if (isFirebaseConfigured) {
   storage = getStorage(app);
 } else {
   console.info(
-    'NextGenSolutions running in local preview mode. Copy .env.example to .env and add your Firebase Web App credentials to enable live Firestore & Auth.',
+    'NextGenSolution running in local preview mode. Copy .env.example to .env and add your Firebase Web App credentials to enable live Firestore & Auth.',
   );
 }
 

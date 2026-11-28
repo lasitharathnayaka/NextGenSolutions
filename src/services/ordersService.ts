@@ -25,6 +25,7 @@ export interface PlaceOrderInput {
   tax: number;
   total: number;
   items: {
+    productId?: string;
     name: string;
     quantity: number;
     unitPrice: number;
@@ -41,7 +42,12 @@ export interface DbOrderRecord {
   total: number;
   payment_status: string;
   fulfillment_status: 'Processing' | 'Shipped (FedEx)' | 'Delivered' | 'Cancelled';
-  order_items?: { item_name: string; quantity: number; unit_price: number }[];
+  order_items?: {
+    product_id?: string | null;
+    item_name: string;
+    quantity: number;
+    unit_price: number;
+  }[];
   created_at?: Timestamp | null;
 }
 
@@ -64,6 +70,7 @@ export async function placeOrder(
       payment_status: 'Pending (WhatsApp)',
       fulfillment_status: 'Processing',
       order_items: input.items.map((item) => ({
+        product_id: item.productId ?? null,
         item_name: item.name,
         quantity: item.quantity,
         unit_price: item.unitPrice,

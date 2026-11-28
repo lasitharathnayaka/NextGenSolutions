@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Cpu,
   Mail,
   Phone,
   Clock,
@@ -135,11 +134,13 @@ export function Footer() {
           {/* Brand & Contact Column */}
           <div className="lg:col-span-4 space-y-4">
             <Link to="/" className="inline-flex items-center gap-2.5 group">
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#16263f] border border-slate-700/70 text-sky-400 group-hover:border-sky-500/60 transition">
-                <Cpu className="h-4 w-4" />
-              </span>
+              <img
+                src="/images/nextgen-logo.jpg"
+                alt="NextGenSolution logo"
+                className="h-9 w-9 rounded-lg object-cover border border-sky-500/30 shadow-xs group-hover:border-sky-400/70 transition"
+              />
               <span className="text-[15px] font-bold tracking-tight text-white">
-                NextGenSolutions
+                NextGenSolution
               </span>
             </Link>
 
@@ -334,7 +335,7 @@ export function Footer() {
         {/* Bottom Legal & Security Row */}
         <div className="mt-6 flex flex-col items-center justify-between gap-4 text-[11px] text-slate-500 sm:flex-row">
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 sm:justify-start">
-            <span>© 2026 NextGenSolutions Inc. All rights reserved.</span>
+            <span>© 2026 NextGenSolution Inc. All rights reserved.</span>
             <span className="hidden sm:inline text-slate-700">•</span>
             <Link to="/support" className="hover:text-slate-300 transition">
               Privacy Policy

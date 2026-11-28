@@ -3,7 +3,7 @@ const ADMIN_WHATSAPP_NUMBER = (
 ).replace(/\D/g, '');
 
 const DEFAULT_INQUIRY_MESSAGE =
-  "Hi NextGenSolutions! I'd like to get more information about your products and services.";
+  "Hi NextGenSolution! I'd like to get more information about your products and services.";
 
 export function WhatsAppFloatingButton() {
   const whatsappUrl = `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${encodeURIComponent(
@@ -15,7 +15,7 @@ export function WhatsAppFloatingButton() {
       href={whatsappUrl}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="Chat with NextGenSolutions on WhatsApp"
+      aria-label="Chat with NextGenSolution on WhatsApp"
       className="group fixed bottom-5 right-5 z-40 flex items-center gap-3 rounded-2xl border border-emerald-400/50 bg-[#0d1726]/95 px-3.5 py-3 text-white shadow-[0_0_26px_rgba(37,211,102,0.28)] backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-emerald-400 hover:shadow-[0_0_36px_rgba(37,211,102,0.5)] sm:px-4"
     >
       {/* WhatsApp Icon Circle with Online Pulse */}

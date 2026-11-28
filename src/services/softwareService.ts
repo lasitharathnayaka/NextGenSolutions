@@ -1,7 +1,9 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   where,
@@ -21,6 +23,7 @@ export interface DbSoftwareProduct {
   features: string[];
   price_label: string;
   price: number;
+  stock?: number;
   icon: string;
   batch_code: string;
   is_wide_featured: boolean;
@@ -51,6 +54,33 @@ export async function fetchSoftwareProducts(): Promise<DbSoftwareProduct[] | nul
     console.error('Failed to fetch software products:', err);
     return null;
   }
+}
+
+export function subscribeSoftwareProducts(
+  onUpdate: (products: DbSoftwareProduct[]) => void,
+): () => void {
+  if (!isFirebaseConfigured || !db) {
+    onUpdate([]);
+    return () => {};
+  }
+  const q = query(
+    collection(db, 'software_products'),
+    where('is_active', '==', true),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const rows = snap.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<DbSoftwareProduct, 'id'>),
+      }));
+      onUpdate(rows);
+    },
+    (err) => {
+      console.error('Failed to subscribe to software_products:', err);
+      onUpdate([]);
+    },
+  );
 }
 
 export async function addSoftwareKeysToBatch(payload: {
@@ -106,8 +136,10 @@ export async function createSoftwareProductWithKeys(payload: {
       features: ['Instant Key Delivery', 'Official Updates', '24/7 Support'],
       price_label: 'Retail Price',
       price: payload.price,
+      stock: payload.keys.length,
       icon: 'monitor',
       batch_code: payload.batch_code,
+      is_wide_featured: false,
       is_active: true,
       created_at: serverTimestamp(),
     });
@@ -118,6 +150,33 @@ export async function createSoftwareProductWithKeys(payload: {
       batch_code: payload.batch_code,
       keys: payload.keys,
     });
+  } catch (err) {
+    return { error: (err as Error).message };
+  }
+}
+
+export async function deleteSoftwareProductByBatch(
+  batchCode: string,
+): Promise<{ error: string | null }> {
+  if (!isFirebaseConfigured || !db) return { error: null };
+  try {
+    const prodSnap = await getDocs(
+      query(
+        collection(db, 'software_products'),
+        where('batch_code', '==', batchCode),
+      ),
+    );
+    await Promise.all(prodSnap.docs.map((d) => deleteDoc(d.ref)));
+
+    const keySnap = await getDocs(
+      query(
+        collection(db, 'software_license_keys'),
+        where('batch_code', '==', batchCode),
+      ),
+    );
+    await Promise.all(keySnap.docs.map((d) => deleteDoc(d.ref)));
+
+    return { error: null };
   } catch (err) {
     return { error: (err as Error).message };
   }

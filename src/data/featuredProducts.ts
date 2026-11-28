@@ -2,6 +2,7 @@ export type DealCategory = 'all' | 'workstations' | 'components';
 
 export interface FeaturedDealProduct {
   id: string;
+  sku: string;
   name: string;
   badge: string;
   badgeVariant: 'emerald' | 'amber';
@@ -16,6 +17,7 @@ export interface FeaturedDealProduct {
 export const FEATURED_DEALS: FeaturedDealProduct[] = [
   {
     id: 'nextgen-titan-x-pro',
+    sku: 'NGS-9940',
     name: 'NextGen Titan X Pro',
     badge: 'Brand New',
     badgeVariant: 'emerald',
@@ -31,6 +33,7 @@ export const FEATURED_DEALS: FeaturedDealProduct[] = [
   },
   {
     id: 'apex-ultrabook-15-6',
+    sku: 'NGS-6510',
     name: 'Apex UltraBook 15.6',
     badge: 'Used - Grade A',
     badgeVariant: 'amber',
@@ -46,6 +49,7 @@ export const FEATURED_DEALS: FeaturedDealProduct[] = [
   },
   {
     id: 'quantum-nvme-2tb-gen4',
+    sku: 'NGS-7721',
     name: 'Quantum NVMe 2TB Gen4',
     badge: 'Brand New',
     badgeVariant: 'emerald',
@@ -61,6 +65,7 @@ export const FEATURED_DEALS: FeaturedDealProduct[] = [
   },
   {
     id: 'cybercraft-pro-studio',
+    sku: 'NGS-SW-006',
     name: 'CyberCraft Pro Studio',
     badge: 'Instant Delivery',
     badgeVariant: 'emerald',

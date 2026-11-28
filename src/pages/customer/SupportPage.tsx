@@ -101,6 +101,12 @@ export function SupportPage() {
   const [topic, setTopic] = useState('Hardware Warranty & RMA');
   const [message, setMessage] = useState('');
   const [submittedTicketId, setSubmittedTicketId] = useState<string | null>(null);
+  const [submittedWhatsAppUrl, setSubmittedWhatsAppUrl] = useState<string | null>(
+    null,
+  );
+  const adminWhatsApp = (
+    import.meta.env.VITE_ADMIN_WHATSAPP || '94760336703'
+  ).replace(/[^\d]/g, '');
 
   // Live Chat Modal State
   const [chatOpen, setChatOpen] = useState(false);
@@ -108,7 +114,7 @@ export function SupportPage() {
   const [chatMessages, setChatMessages] = useState([
     {
       sender: 'engineer',
-      text: 'Hello! Welcome to NextGenSolutions Engineering Support. How can we help with your hardware, software key, or repair today?',
+      text: 'Hello! Welcome to NextGenSolution Engineering Support. How can we help with your hardware, software key, or repair today?',
     },
   ]);
 
@@ -133,17 +139,41 @@ export function SupportPage() {
     const code = Math.floor(2000 + Math.random() * 8000);
     const ticketNum = `SUP-${code}`;
 
+    const trimmedName = fullName.trim();
+    const trimmedEmail = email.trim();
+    const trimmedRef = referenceId.trim();
+    const trimmedMsg = message.trim();
+
+    const waLines = [
+      `*NextGenSolution Support Ticket*`,
+      `Ticket ID: #${ticketNum}`,
+      `Name: ${trimmedName}`,
+      `Email: ${trimmedEmail}`,
+      `Topic: ${topic}`,
+      ...(trimmedRef ? [`Order / Product ID: ${trimmedRef}`] : []),
+      ``,
+      `Message:`,
+      trimmedMsg,
+    ];
+    const waUrl = `https://wa.me/${adminWhatsApp}?text=${encodeURIComponent(
+      waLines.join('\n'),
+    )}`;
+
+    // Open WhatsApp immediately in user-gesture context so browsers don't block the popup
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+
     await submitSupportTicket({
       ticketNumber: ticketNum,
       userId: user?.uid ?? null,
-      fullName: fullName.trim(),
-      email: email.trim(),
+      fullName: trimmedName,
+      email: trimmedEmail,
       topic,
-      referenceId: referenceId.trim() || undefined,
-      message: message.trim(),
+      referenceId: trimmedRef || undefined,
+      message: trimmedMsg,
     });
 
     setSubmittedTicketId(ticketNum);
+    setSubmittedWhatsAppUrl(waUrl);
     setFullName('');
     setEmail('');
     setReferenceId('');
@@ -432,12 +462,23 @@ export function SupportPage() {
                   <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                   <div>
                     <p className="font-bold">
-                      Ticket #{submittedTicketId} Created
+                      Ticket #{submittedTicketId} Created &amp; Sent to Admin WhatsApp
                     </p>
                     <p className="mt-0.5 text-[11px]">
-                      We&apos;ve sent a confirmation copy to your email and
-                      assigned an engineer.
+                      Your ticket is saved and WhatsApp was opened to connect
+                      directly with our support admin.
                     </p>
+                    {submittedWhatsAppUrl && (
+                      <a
+                        href={submittedWhatsAppUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-[11px] font-bold text-white hover:bg-[#1ebe5d] transition"
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        <span>Open WhatsApp Chat</span>
+                      </a>
+                    )}
                   </div>
                 </div>
               )}
@@ -453,8 +494,8 @@ export function SupportPage() {
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Alex Miller"
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none"
+                      placeholder="e.g. Kasun Perera"
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
                     />
                   </div>
                   <div>
@@ -466,8 +507,8 @@ export function SupportPage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="alex@company.com"
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none"
+                      placeholder="e.g. kasun@gmail.com"
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
                     />
                   </div>
                 </div>
@@ -491,14 +532,14 @@ export function SupportPage() {
                   </div>
                   <div>
                     <label className="block font-semibold text-slate-700">
-                      Order / Ticket ID
+                      Order / Product ID
                     </label>
                     <input
                       type="text"
                       value={referenceId}
                       onChange={(e) => setReferenceId(e.target.value)}
-                      placeholder="e.g. NGS-8842"
-                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none"
+                      placeholder="e.g. NGS-ORD-7513"
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
                     />
                   </div>
                 </div>
@@ -513,16 +554,16 @@ export function SupportPage() {
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Describe your hardware issue, order question, or license key request..."
-                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2.5 text-slate-900 focus:border-sky-500 focus:bg-white focus:outline-none"
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2.5 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] py-2.5 text-xs font-bold text-white shadow-sm shadow-sky-500/20 hover:from-[#0369a1] hover:to-[#0284c7] transition cursor-pointer"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#16a34a] to-[#22c55e] py-2.5 text-xs font-bold text-white shadow-sm shadow-emerald-500/20 hover:from-[#15803d] hover:to-[#16a34a] transition cursor-pointer"
                 >
                   <Send className="h-3.5 w-3.5" />
-                  <span>Submit Support Ticket</span>
+                  <span>Submit Support Ticket via WhatsApp</span>
                 </button>
               </form>
             </div>
@@ -533,7 +574,7 @@ export function SupportPage() {
                 Direct Service Lab Contact
               </p>
               <h3 className="mt-1 text-sm font-bold">
-                NextGenSolutions Piliyandala Hub
+                NextGenSolution Piliyandala Hub
               </h3>
               <div className="mt-4 space-y-2.5 text-xs text-slate-300">
                 <div className="flex items-start gap-2.5">
@@ -544,7 +585,12 @@ export function SupportPage() {
                 </div>
                 <div className="flex items-center gap-2.5">
                   <Phone className="h-4 w-4 shrink-0 text-sky-400" />
-                  <span>+1 (800) 555-0199</span>
+                  <a
+                    href="tel:+94760336703"
+                    className="hover:text-sky-400 transition"
+                  >
+                    +94 76 033 6703
+                  </a>
                 </div>
                 <div className="flex items-center gap-2.5">
                   <Mail className="h-4 w-4 shrink-0 text-sky-400" />

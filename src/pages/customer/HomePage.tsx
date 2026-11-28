@@ -199,6 +199,7 @@ export function HomePage() {
     }
     addToCart({
       id: product.id,
+      sku: product.sku,
       name: product.name,
       price: product.price,
       priceSuffix: product.priceSuffix,

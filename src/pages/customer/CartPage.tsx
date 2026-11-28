@@ -19,10 +19,6 @@ import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { placeOrder } from '@/services/ordersService';
 
-const TAX_RATE = 0.08;
-const FREE_SHIPPING_THRESHOLD = 150000;
-const FLAT_SHIPPING = 1500;
-
 // Admin WhatsApp number (international format, digits only, e.g. 94760336703)
 const ADMIN_WHATSAPP_NUMBER = (
   (import.meta.env.VITE_ADMIN_WHATSAPP as string | undefined) || '94760336703'
@@ -33,26 +29,21 @@ function buildWhatsAppOrderUrl(params: {
   customerName: string;
   customerEmail: string;
   shippingAddress: string;
-  items: { name: string; quantity: number; unitPrice: number }[];
+  items: { productId?: string; name: string; quantity: number; unitPrice: number }[];
   subtotal: number;
-  shipping: number;
-  tax: number;
   total: number;
 }) {
   const itemLines = params.items
     .map(
       (item, idx) =>
-        `${idx + 1}. ${item.name} × ${item.quantity} — Rs. ${(
+        `${idx + 1}. ${item.productId ? `[${item.productId}] ` : ''}${item.name} × ${item.quantity} — Rs. ${(
           item.unitPrice * item.quantity
         ).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
     )
     .join('\n');
 
-  const shippingText =
-    params.shipping === 0 ? 'Free' : `Rs. ${params.shipping.toFixed(2)}`;
-
   const message = [
-    `*New Order — NextGenSolutions*`,
+    `*New Order — NextGenSolution*`,
     `Order Ref: *#${params.orderNumber}*`,
     ``,
     `*Customer Details:*`,
@@ -65,8 +56,7 @@ function buildWhatsAppOrderUrl(params: {
     ``,
     `*Order Summary:*`,
     `• Subtotal: Rs. ${params.subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-    `• Express Dispatch: ${shippingText}`,
-    `• Estimated Tax (8%): Rs. ${params.tax.toFixed(2)}`,
+    `• Delivery: Confirmed via WhatsApp`,
     `• *Total: Rs. ${params.total.toLocaleString('en-US', { minimumFractionDigits: 2 })}*`,
     ``,
     `Please confirm my order and share payment/delivery details. Thank you!`,
@@ -99,10 +89,7 @@ export function CartPage() {
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
-  const shipping =
-    subtotal === 0 || subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : FLAT_SHIPPING;
-  const tax = Number((subtotal * TAX_RATE).toFixed(2));
-  const total = subtotal + shipping + tax;
+  const total = subtotal;
 
   const handlePlaceOrder = async (e: FormEvent) => {
     e.preventDefault();
@@ -112,6 +99,7 @@ export function CartPage() {
     const code = Math.floor(1000 + Math.random() * 9000);
     const orderNum = `NGS-ORD-${code}`;
     const orderItems = items.map((i) => ({
+      productId: i.sku || i.id,
       name: i.name,
       quantity: i.quantity,
       unitPrice: i.price,
@@ -124,8 +112,6 @@ export function CartPage() {
       shippingAddress: shippingAddress.trim(),
       items: orderItems,
       subtotal,
-      shipping,
-      tax,
       total,
     });
 
@@ -136,8 +122,8 @@ export function CartPage() {
       customerEmail: customerEmail.trim(),
       shippingAddress: shippingAddress.trim(),
       subtotal,
-      shippingFee: shipping,
-      tax,
+      shippingFee: 0,
+      tax: 0,
       total,
       items: orderItems,
     });
@@ -420,17 +406,9 @@ export function CartPage() {
                       </span>
                     </div>
                     <div className="flex justify-between text-slate-500">
-                      <span>Express Dispatch</span>
-                      <span className="font-semibold text-emerald-600">
-                        {shipping === 0
-                          ? 'Free'
-                          : `Rs. ${shipping.toFixed(2)}`}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-slate-500">
-                      <span>Estimated Tax (8%)</span>
-                      <span className="font-semibold text-slate-800">
-                        Rs. {tax.toFixed(2)}
+                      <span>Delivery</span>
+                      <span className="font-semibold text-slate-500">
+                        Confirmed via WhatsApp
                       </span>
                     </div>
                     <div className="flex justify-between border-t border-slate-100 pt-3 text-sm">

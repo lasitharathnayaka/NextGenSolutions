@@ -11,6 +11,7 @@ export const CART_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours (1 day)
 
 export interface SimpleCartItem {
   id: string;
+  sku?: string;
   name: string;
   price: number;
   priceSuffix?: string;

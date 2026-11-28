@@ -7,16 +7,18 @@ import {
   User,
   Menu,
   X,
-  Cpu,
   LogIn,
   LogOut,
   ArrowRight,
   KeyRound,
   Heart,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { useFavorites } from '@/contexts/FavoritesContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { CATALOG_PRODUCTS } from '@/data/catalogProducts';
 import { FEATURED_DEALS } from '@/data/featuredProducts';
 import { cn } from '@/lib/utils';
@@ -112,6 +114,7 @@ export function Navbar() {
   const { totalItems } = useCart();
   const { totalFavorites } = useFavorites();
   const { user, profile, isAdminOrStaff, signOut } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
   const isProductRoute = pathname.startsWith('/product');
@@ -165,11 +168,13 @@ export function Navbar() {
         {/* Left: Brand + Search */}
         <div className="flex flex-1 items-center gap-6">
           <Link to="/" className="flex shrink-0 items-center gap-2.5 group">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#16263f] border border-slate-700/70 text-sky-400 group-hover:border-sky-500/60 transition">
-              <Cpu className="h-4 w-4" />
-            </span>
+            <img
+              src="/images/nextgen-logo.jpg"
+              alt="NextGenSolution logo"
+              className="h-9 w-9 rounded-lg object-cover border border-sky-500/30 shadow-xs group-hover:border-sky-400/70 transition"
+            />
             <span className="text-[15px] font-bold tracking-tight text-white">
-              NextGenSolutions
+              NextGenSolution
             </span>
           </Link>
 
@@ -350,6 +355,21 @@ export function Navbar() {
             <Wrench className="h-3.5 w-3.5" />
             <span>Book a Repair</span>
           </Link>
+
+          {/* Theme Toggle (Light / Dark Mode) */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            className="flex h-9 w-9 items-center justify-center rounded-md text-slate-300 hover:bg-[#162338] hover:text-amber-300 transition cursor-pointer"
+          >
+            {isDark ? (
+              <Sun className="h-4.5 w-4.5 text-amber-300" />
+            ) : (
+              <Moon className="h-4.5 w-4.5" />
+            )}
+          </button>
 
           {/* Favourites Button */}
           <Link

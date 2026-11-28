@@ -90,7 +90,7 @@ export function downloadOrderInvoicePdf(order: DbOrderRecord): void {
   drawRect(0, 725, 595, 117, 0.04, 0.07, 0.13);
   drawRect(0, 722, 595, 3, 0.01, 0.52, 0.78);
 
-  drawText('NextGenSolutions', 44, 795, 22, true, 1, 1, 1);
+  drawText('NextGenSolution', 44, 795, 22, true, 1, 1, 1);
   drawText(
     'Enterprise Hardware, Software Licensing & Precision Repairs',
     44,
@@ -228,7 +228,7 @@ export function downloadOrderInvoicePdf(order: DbOrderRecord): void {
   // 5. Footer Warranty & Thank-You Note
   drawLine(44, 95, 551, 95, 0.85, 0.89, 0.93, 0.8);
   drawText(
-    'Thank you for choosing NextGenSolutions! All certified hardware includes official or seller warranty coverage.',
+    'Thank you for choosing NextGenSolution! All certified hardware includes official or seller warranty coverage.',
     44,
     78,
     8.5,
@@ -248,7 +248,7 @@ export function downloadOrderInvoicePdf(order: DbOrderRecord): void {
     0.5,
   );
   drawText(
-    'This is a computer-generated invoice from NextGenSolutions (Piliyandala Service Hub).',
+    'This is a computer-generated invoice from NextGenSolution (Piliyandala Service Hub).',
     44,
     46,
     7.5,

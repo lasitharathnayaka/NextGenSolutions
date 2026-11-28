@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Laptop,
@@ -14,62 +14,19 @@ import {
   ChevronRight,
   Sparkles,
   MapPin,
+  MessageCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { createRepairBooking } from '@/services/repairsService';
+import {
+  DEFAULT_REPAIR_SERVICES,
+  subscribeRepairServices,
+  type RepairServicePackage,
+} from '@/services/repairServicesCatalog';
 
 type DeviceType = 'laptop' | 'desktop';
 type LogisticsType = 'drop-off' | 'courier';
-
-interface ServicePackage {
-  id: string;
-  name: string;
-  description: string;
-  price: number;
-  priceDisplay: string;
-  plusParts?: boolean;
-  turnaround: string;
-}
-
-const SERVICE_PACKAGES: ServicePackage[] = [
-  {
-    id: 'thermal-repaste',
-    name: 'Full Thermal Repaste & Deep Clean',
-    description:
-      'Removes dust, replaces liquid metal/paste, lowers temps up to 15°C.',
-    price: 7500,
-    priceDisplay: 'Rs. 7,500',
-    turnaround: 'Est. 24–48 Hours',
-  },
-  {
-    id: 'ssd-ram-upgrade',
-    name: 'SSD/RAM Hardware Upgrade',
-    description: 'Professional component installation and stress testing.',
-    price: 4500,
-    priceDisplay: 'Rs. 4,500 + Parts',
-    plusParts: true,
-    turnaround: 'Same Day (4–6 Hrs)',
-  },
-  {
-    id: 'os-install-backup',
-    name: 'OS Install & Data Backup',
-    description:
-      'Clean OS reinstallation, driver updates, and user data migration.',
-    price: 6000,
-    priceDisplay: 'Rs. 6,000',
-    turnaround: 'Est. 12–24 Hours',
-  },
-  {
-    id: 'advanced-diagnostics',
-    name: 'Advanced Hardware Diagnostics',
-    description:
-      'Full component bench test, motherboard short detection & report.',
-    price: 3000,
-    priceDisplay: 'Rs. 3,000',
-    turnaround: 'Est. 24 Hours',
-  },
-];
 
 const TIME_SLOTS = [
   '09:00 AM - 11:00 AM',
@@ -79,13 +36,22 @@ const TIME_SLOTS = [
 
 const COURIER_FEE = 1500;
 const TAX_RATE = 0.08;
+const ADMIN_WHATSAPP_NUMBER = (
+  (import.meta.env.VITE_ADMIN_WHATSAPP as string | undefined) || '94760336703'
+).replace(/\D/g, '');
 
 export function BookRepairPage() {
   const { user, profile } = useAuth();
   const [deviceType, setDeviceType] = useState<DeviceType>('laptop');
-  const [selectedServiceId, setSelectedServiceId] = useState<string>(
-    SERVICE_PACKAGES[0].id,
+  const [allServices, setAllServices] = useState<RepairServicePackage[]>(
+    DEFAULT_REPAIR_SERVICES,
   );
+  const [selectedServiceId, setSelectedServiceId] = useState<string>(
+    DEFAULT_REPAIR_SERVICES[0].id,
+  );
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
   const [brandModel, setBrandModel] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
   const [issueDescription, setIssueDescription] = useState('');
@@ -94,12 +60,34 @@ export function BookRepairPage() {
   const [preferredDate, setPreferredDate] = useState('');
   const [selectedSlot, setSelectedSlot] = useState<string>(TIME_SLOTS[1]);
 
+  const customerId = profile?.enterprise_id || 'NGS-CUST-001';
+
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmedTicket, setConfirmedTicket] = useState<string | null>(null);
+  const [confirmedWhatsAppUrl, setConfirmedWhatsAppUrl] = useState<
+    string | null
+  >(null);
+
+  useEffect(() => {
+    const unsub = subscribeRepairServices((services) => {
+      setAllServices(services);
+    });
+    return unsub;
+  }, []);
+
+  const visibleServices = useMemo(() => {
+    const active = allServices.filter((s) => s.is_active);
+    const matching = active.filter((s) => {
+      if (s.device_scope === 'All Devices') return true;
+      if (deviceType === 'laptop') return s.device_scope === 'Laptop & Notebook';
+      return s.device_scope === 'Desktop & Workstation';
+    });
+    return matching.length > 0 ? matching : DEFAULT_REPAIR_SERVICES;
+  }, [allServices, deviceType]);
 
   const selectedService =
-    SERVICE_PACKAGES.find((s) => s.id === selectedServiceId) ??
-    SERVICE_PACKAGES[0];
+    visibleServices.find((s) => s.id === selectedServiceId) ??
+    visibleServices[0];
 
   const shippingFee = logistics === 'courier' ? COURIER_FEE : 0;
   const subtotal = selectedService.price + shippingFee;
@@ -108,6 +96,14 @@ export function BookRepairPage() {
 
   const handleConfirmBooking = async (e: FormEvent) => {
     e.preventDefault();
+    if (!customerName.trim()) {
+      setFormError('Please enter your Full Name.');
+      return;
+    }
+    if (!customerAddress.trim()) {
+      setFormError('Please enter your Address.');
+      return;
+    }
     if (!brandModel.trim()) {
       setFormError('Please enter your device Brand / Model.');
       return;
@@ -127,13 +123,47 @@ export function BookRepairPage() {
 
     setFormError(null);
     const randomCode = Math.floor(1000 + Math.random() * 9000);
-    const ticketNum = `NGS-REP-${randomCode}`;
+    const ticketNum = `NGS-ORD-${randomCode}`;
+
+    const waLines = [
+      `*New Repair Booking — NextGenSolution*`,
+      `Order ID: *#${ticketNum}*`,
+      ``,
+      `*Customer Details:*`,
+      `• Customer ID: ${customerId}`,
+      `• Name: ${customerName.trim()}`,
+      ...(customerPhone.trim() ? [`• Phone: ${customerPhone.trim()}`] : []),
+      ...(user?.email ? [`• Email: ${user.email}`] : []),
+      `• Address: ${customerAddress.trim()}`,
+      ``,
+      `*Repair Details:*`,
+      `• Device Type: ${deviceType === 'laptop' ? 'Laptop & Notebook' : 'Desktop & Workstation'}`,
+      `• Brand / Model: ${brandModel.trim()}`,
+      ...(serialNumber.trim() ? [`• Serial Number: ${serialNumber.trim()}`] : []),
+      `• Service: [${selectedService.service_id}] ${selectedService.name}`,
+      `• Issue: ${issueDescription.trim()}`,
+      ``,
+      `*Logistics:* ${logistics === 'drop-off' ? 'In-Store Drop-Off (Piliyandala Hub)' : `Doorstep Courier (${pickupAddress.trim()})`}`,
+      `*Date & Time:* ${preferredDate} · ${selectedSlot}`,
+      `*Total Due:* Rs. ${totalDue.toLocaleString('en-US', { minimumFractionDigits: 2 })}${selectedService.plus_parts ? ' (+ Parts)' : ''}`,
+      ``,
+      `Please confirm my repair booking. Thank you!`,
+    ];
+    const waUrl = `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${encodeURIComponent(
+      waLines.join('\n'),
+    )}`;
+
+    // Open Admin WhatsApp immediately inside user gesture so popups are not blocked
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
 
     await createRepairBooking({
       ticketNumber: ticketNum,
       userId: user?.uid ?? null,
-      customerName: profile?.full_name ?? null,
+      customerId,
+      customerName: customerName.trim(),
       customerEmail: user?.email ?? null,
+      customerPhone: customerPhone.trim() || null,
+      customerAddress: customerAddress.trim(),
       deviceType,
       servicePackage: selectedService.name,
       brandModel: brandModel.trim(),
@@ -148,6 +178,7 @@ export function BookRepairPage() {
       totalDue,
     });
 
+    setConfirmedWhatsAppUrl(waUrl);
     setConfirmedTicket(ticketNum);
   };
 
@@ -325,8 +356,8 @@ export function BookRepairPage() {
 
               {/* Service Package Radio Rows */}
               <div className="mt-4 space-y-2.5">
-                {SERVICE_PACKAGES.map((pkg) => {
-                  const isSelected = pkg.id === selectedServiceId;
+                {visibleServices.map((pkg) => {
+                  const isSelected = pkg.id === selectedService.id;
                   return (
                     <button
                       key={pkg.id}
@@ -353,9 +384,14 @@ export function BookRepairPage() {
                           )}
                         </span>
                         <div>
-                          <p className="text-xs font-bold text-slate-900">
-                            {pkg.name}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-xs font-bold text-slate-900">
+                              {pkg.name}
+                            </p>
+                            <span className="inline-block rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-600">
+                              {pkg.service_id}
+                            </span>
+                          </div>
                           <p className="mt-0.5 text-[11px] text-slate-500">
                             {pkg.description}
                           </p>
@@ -368,7 +404,7 @@ export function BookRepairPage() {
                           isSelected ? 'text-[#0284c7]' : 'text-slate-900',
                         )}
                       >
-                        {pkg.priceDisplay}
+                        {pkg.price_display}
                       </span>
                     </button>
                   );
@@ -646,7 +682,7 @@ export function BookRepairPage() {
                     </span>
                     <span className="text-lg font-extrabold text-[#0284c7]">
                       Rs. {totalDue.toFixed(2)}
-                      {selectedService.plusParts ? '*' : ''}
+                      {selectedService.plus_parts ? '*' : ''}
                     </span>
                   </div>
                 </div>
@@ -671,6 +707,59 @@ export function BookRepairPage() {
                   </div>
                 </div>
 
+                {/* Customer Details (for Admin identification & WhatsApp) */}
+                <div className="mt-5 space-y-3 border-t border-slate-100 pt-4 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      Customer Details
+                    </span>
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-bold text-slate-700">
+                      ID: {customerId}
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700">
+                      Full Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="e.g. Kasun Perera"
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      placeholder="e.g. 077 123 4567"
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700">
+                      Address *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={customerAddress}
+                      onChange={(e) => setCustomerAddress(e.target.value)}
+                      placeholder="e.g. 45/2 Galle Road, Piliyandala, 10300"
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+
                 {/* Inline Validation Error */}
                 {formError && (
                   <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700">
@@ -681,10 +770,10 @@ export function BookRepairPage() {
                 {/* Submit CTA */}
                 <button
                   type="submit"
-                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] py-3 text-xs font-bold text-white shadow-sm shadow-sky-500/20 hover:from-[#0369a1] hover:to-[#0284c7] transition cursor-pointer"
+                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#16a34a] to-[#22c55e] py-3 text-xs font-bold text-white shadow-sm shadow-emerald-500/20 hover:from-[#15803d] hover:to-[#16a34a] transition cursor-pointer"
                 >
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Confirm Service Booking</span>
+                  <MessageCircle className="h-4 w-4" />
+                  <span>Confirm Service Booking via WhatsApp</span>
                 </button>
 
                 {/* Trust Micro-Footer */}
@@ -727,10 +816,10 @@ export function BookRepairPage() {
             <div className="space-y-4 p-5 text-xs">
               <div className="rounded-xl border border-sky-200/70 bg-sky-50/60 p-3.5 text-center">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                  Repair Ticket Reference
+                  Repair Order Reference
                 </p>
                 <p className="mt-1 font-mono text-lg font-extrabold text-[#0284c7]">
-                  {confirmedTicket}
+                  #{confirmedTicket}
                 </p>
               </div>
 
@@ -769,11 +858,22 @@ export function BookRepairPage() {
                 </div>
               </dl>
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-col gap-2 pt-2 sm:flex-row">
+                {confirmedWhatsAppUrl && (
+                  <a
+                    href={confirmedWhatsAppUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#25D366] py-2.5 text-xs font-bold text-white hover:bg-[#1ebe5d] transition"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    <span>Open WhatsApp Chat</span>
+                  </a>
+                )}
                 <button
                   type="button"
                   onClick={() => setConfirmedTicket(null)}
-                  className="flex-1 rounded-xl bg-[#0284c7] py-2.5 text-xs font-semibold text-white hover:bg-[#0369a1] cursor-pointer"
+                  className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
                 >
                   Done
                 </button>

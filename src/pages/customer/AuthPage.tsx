@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Cpu,
   Mail,
   Lock,
   User,
@@ -224,7 +223,7 @@ export function AuthPage({
                 ? '/images/hero-bg-workstation.jpg'
                 : '/images/hero-bg-workspace.jpg'
             }
-            alt="NextGenSolutions Hardware Studio"
+            alt="NextGenSolution Hardware Studio"
             className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-30 transition-all duration-700"
           />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#08111e]/95 via-[#0a1628]/88 to-[#07182d]/95" />
@@ -244,12 +243,14 @@ export function AuthPage({
           {/* Top Brand + Pill */}
           <div className="relative z-10">
             <Link to="/" className="inline-flex items-center gap-2.5 group">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/20 border border-sky-400/35 text-sky-400 shadow-inner transition group-hover:bg-sky-500/30">
-                <Cpu className="h-5 w-5" />
-              </span>
+              <img
+                src="/images/nextgen-logo.jpg"
+                alt="NextGenSolution logo"
+                className="h-10 w-10 rounded-xl object-cover border border-sky-400/40 shadow-sm group-hover:border-sky-300/80 transition"
+              />
               <div>
                 <span className="block text-base font-extrabold tracking-tight text-white">
-                  NextGenSolutions
+                  NextGenSolution
                 </span>
                 <span className="block text-[10px] font-medium uppercase tracking-widest text-sky-400/90">
                   Enterprise Hardware &amp; Labs
@@ -286,7 +287,7 @@ export function AuthPage({
             <p className="mt-3 text-xs leading-relaxed text-slate-300/90">
               {mode === 'login'
                 ? 'Manage hardware orders, retrieve verified software keys, and track live lab diagnostics in one place.'
-                : 'Create your NextGenSolutions ID to checkout hardware, store genuine software licenses, and book priority lab repairs.'}
+                : 'Create your NextGenSolution ID to checkout hardware, store genuine software licenses, and book priority lab repairs.'}
             </p>
           </div>
 
@@ -357,11 +358,13 @@ export function AuthPage({
           {/* Mobile-only dark brand header */}
           <div className="mb-6 flex items-center justify-between lg:hidden">
             <Link to="/" className="inline-flex items-center gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0a1220] text-sky-400">
-                <Cpu className="h-5 w-5" />
-              </span>
+              <img
+                src="/images/nextgen-logo.jpg"
+                alt="NextGenSolution logo"
+                className="h-9 w-9 rounded-xl object-cover border border-sky-500/30 shadow-xs"
+              />
               <span className="text-sm font-extrabold tracking-tight text-slate-900">
-                NextGenSolutions
+                NextGenSolution
               </span>
             </Link>
             <span className="rounded-full bg-sky-50 border border-sky-200 px-2.5 py-0.5 text-[10px] font-semibold text-[#0284c7]">
@@ -421,10 +424,10 @@ export function AuthPage({
             </h1>
             <p className="mt-1.5 text-xs text-slate-500">
               {forgotMode
-                ? 'Enter the email linked to your NextGenSolutions account and we will send a recovery link.'
+                ? 'Enter the email linked to your NextGenSolution account and we will send a recovery link.'
                 : mode === 'login'
                   ? 'Enter your credentials to access your orders, software vault, and repair tickets.'
-                  : 'Join NextGenSolutions to unlock express checkout, warranty tracking, and instant keys.'}
+                  : 'Join NextGenSolution to unlock express checkout, warranty tracking, and instant keys.'}
             </p>
           </div>
 
@@ -726,7 +729,7 @@ export function AuthPage({
             <div className="mt-6 border-t border-slate-100 pt-5 text-center text-xs text-slate-500">
               {mode === 'login' ? (
                 <>
-                  New to NextGenSolutions?{' '}
+                  New to NextGenSolution?{' '}
                   <button
                     type="button"
                     onClick={() => switchMode('register')}

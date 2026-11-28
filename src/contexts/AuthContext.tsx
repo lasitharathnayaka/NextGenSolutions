@@ -111,7 +111,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser);
       if (nextUser) {
-        loadProfile(nextUser).finally(() => setLoading(false));
+        setLoading(true);
+        loadProfile(nextUser)
+          .catch((err) => {
+            console.error('Failed to load user profile:', err);
+          })
+          .finally(() => setLoading(false));
       } else {
         setProfile(null);
         setLoading(false);
@@ -130,7 +135,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
+      setUser(cred.user);
       const loaded = await loadProfile(cred.user);
+      setLoading(false);
       return {
         error: null,
         isAdminOrStaff:
@@ -152,7 +159,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       const cred = await signInWithPopup(auth, provider);
+      setUser(cred.user);
       const loaded = await loadProfile(cred.user);
+      setLoading(false);
       return {
         error: null,
         isAdminOrStaff:
@@ -222,8 +231,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const normalizedRole = String(profile?.role ?? '')
+    .trim()
+    .toLowerCase();
   const isAdminOrStaff =
-    profile?.role === 'admin' || profile?.role === 'technician';
+    normalizedRole === 'admin' || normalizedRole === 'technician';
 
   return (
     <AuthContext.Provider
