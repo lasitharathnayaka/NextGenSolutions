@@ -19,6 +19,12 @@ import { useCart } from '@/contexts/CartContext';
 import { useFavorites } from '@/contexts/FavoritesContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { isFirebaseConfigured } from '@/lib/firebase';
+import { subscribeProducts, type DbProduct } from '@/services/productsService';
+import {
+  subscribeSoftwareProducts,
+  type DbSoftwareProduct,
+} from '@/services/softwareService';
 import { CATALOG_PRODUCTS } from '@/data/catalogProducts';
 import { FEATURED_DEALS } from '@/data/featuredProducts';
 import { cn } from '@/lib/utils';
@@ -122,13 +128,90 @@ export function Navbar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [liveProducts, setLiveProducts] = useState<DbProduct[]>([]);
+  const [liveSoftware, setLiveSoftware] = useState<DbSoftwareProduct[]>([]);
   const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) return;
+    const unsubProducts = subscribeProducts((rows) => setLiveProducts(rows));
+    const unsubSoftware = subscribeSoftwareProducts((rows) =>
+      setLiveSoftware(rows),
+    );
+    return () => {
+      unsubProducts();
+      unsubSoftware();
+    };
+  }, []);
+
+  const searchableItems = useMemo<QuickSearchResult[]>(() => {
+    if (!isFirebaseConfigured) return ALL_SEARCH_ITEMS;
+
+    const hwItems: QuickSearchResult[] = liveProducts
+      .filter((p) => p.is_active !== false)
+      .map((p) => {
+        const catLower = (p.category || '').toLowerCase();
+        const categoryAliases =
+          catLower.includes('storage') || catLower.includes('ssd')
+            ? 'ssd hdd nvme storage drive'
+            : catLower.includes('ram')
+              ? 'ram memory ddr4 ddr5'
+              : catLower.includes('laptop')
+                ? 'laptop notebook ultrabook'
+                : catLower.includes('desktop')
+                  ? 'desktop workstation pc monitor'
+                  : 'components hardware';
+        return {
+          id: p.slug || p.id,
+          name: p.name,
+          subtitle: `${p.sku} · ${p.category} · ${p.condition}`,
+          price: Number(p.price) || 0,
+          image: p.image_urls?.[0] || '/images/dell-xps-15.jpg',
+          href: `/product/${p.slug || p.id}`,
+          kind: 'hardware',
+          searchText: [
+            p.name,
+            p.sku,
+            p.brand,
+            p.category,
+            categoryAliases,
+            p.condition,
+            p.subtitle || '',
+            p.description || '',
+            ...(p.specs || []),
+          ]
+            .join(' ')
+            .toLowerCase(),
+        };
+      });
+
+    const swItems: QuickSearchResult[] = liveSoftware.map((sw) => ({
+      id: sw.id,
+      name: sw.name,
+      subtitle: `${sw.batch_code || sw.id} · ${sw.platform || 'Digital License'}`,
+      price: Number(sw.price) || 0,
+      href: '/software',
+      kind: 'software',
+      searchText: [
+        sw.name,
+        sw.batch_code || '',
+        sw.platform || '',
+        sw.category || '',
+        sw.description || '',
+        'software license key',
+      ]
+        .join(' ')
+        .toLowerCase(),
+    }));
+
+    return [...hwItems, ...swItems];
+  }, [liveProducts, liveSoftware]);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
     const q = params.get('q');
-    if (pathname === '/catalog' && q !== null) {
-      setSearchQuery(q);
+    if (pathname === '/catalog') {
+      setSearchQuery(q ?? '');
     }
   }, [pathname, search]);
 
@@ -149,10 +232,12 @@ export function Navbar() {
     const trimmed = searchQuery.trim().toLowerCase();
     if (!trimmed) return [];
     const tokens = trimmed.split(/\s+/);
-    return ALL_SEARCH_ITEMS.filter((item) =>
-      tokens.every((token) => item.searchText.includes(token)),
-    ).slice(0, 6);
-  }, [searchQuery]);
+    return searchableItems
+      .filter((item) =>
+        tokens.every((token) => item.searchText.includes(token)),
+      )
+      .slice(0, 6);
+  }, [searchQuery, searchableItems]);
 
   const handleSearchSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -205,7 +290,13 @@ export function Navbar() {
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSearchFocused(false);
+                    if (pathname === '/catalog') {
+                      navigate('/catalog');
+                    }
+                  }}
                   aria-label="Clear search"
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition cursor-pointer"
                 >

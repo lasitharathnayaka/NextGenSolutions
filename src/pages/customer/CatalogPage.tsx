@@ -37,13 +37,16 @@ import { subscribeProducts, type DbProduct } from '@/services/productsService';
 import { cn } from '@/lib/utils';
 
 function mapDbProductToCatalog(p: DbProduct): CatalogProduct {
+  const rawCat = String(p.category || '').toLowerCase();
   const category: ProductCategory =
     p.category === 'Laptops' ||
     p.category === 'Desktops' ||
     p.category === 'RAM' ||
     p.category === 'SSD / Storage'
       ? p.category
-      : 'RAM';
+      : rawCat.includes('storage') || rawCat.includes('ssd') || rawCat.includes('hdd')
+        ? 'SSD / Storage'
+        : 'RAM';
   const brand: ProductBrand =
     p.brand === 'Dell' ||
     p.brand === 'Lenovo' ||
@@ -270,11 +273,20 @@ export function CatalogPage() {
         return false;
       }
       if (query) {
+        const categoryAliases =
+          item.category === 'SSD / Storage'
+            ? 'ssd hdd nvme storage drive'
+            : item.category === 'RAM'
+              ? 'ram memory ddr4 ddr5'
+              : item.category === 'Laptops'
+                ? 'laptop notebook ultrabook'
+                : 'desktop workstation pc monitor';
         const haystack = [
           item.name,
           item.sku,
           item.brand,
           item.category,
+          categoryAliases,
           item.condition,
           ...item.specs,
         ]
