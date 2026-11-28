@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { isFirebaseConfigured } from '@/lib/firebase';
 import { createRepairBooking } from '@/services/repairsService';
 import {
   DEFAULT_REPAIR_SERVICES,
@@ -44,10 +45,10 @@ export function BookRepairPage() {
   const { user, profile } = useAuth();
   const [deviceType, setDeviceType] = useState<DeviceType>('laptop');
   const [allServices, setAllServices] = useState<RepairServicePackage[]>(
-    DEFAULT_REPAIR_SERVICES,
+    isFirebaseConfigured ? [] : DEFAULT_REPAIR_SERVICES,
   );
   const [selectedServiceId, setSelectedServiceId] = useState<string>(
-    DEFAULT_REPAIR_SERVICES[0].id,
+    isFirebaseConfigured ? '' : DEFAULT_REPAIR_SERVICES[0].id,
   );
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -82,20 +83,29 @@ export function BookRepairPage() {
       if (deviceType === 'laptop') return s.device_scope === 'Laptop & Notebook';
       return s.device_scope === 'Desktop & Workstation';
     });
-    return matching.length > 0 ? matching : DEFAULT_REPAIR_SERVICES;
+    return isFirebaseConfigured
+      ? matching
+      : matching.length > 0
+        ? matching
+        : DEFAULT_REPAIR_SERVICES;
   }, [allServices, deviceType]);
 
   const selectedService =
     visibleServices.find((s) => s.id === selectedServiceId) ??
-    visibleServices[0];
+    visibleServices[0] ??
+    null;
 
   const shippingFee = logistics === 'courier' ? COURIER_FEE : 0;
-  const subtotal = selectedService.price + shippingFee;
+  const subtotal = (selectedService?.price ?? 0) + shippingFee;
   const estimatedTax = Number((subtotal * TAX_RATE).toFixed(2));
   const totalDue = subtotal + estimatedTax;
 
   const handleConfirmBooking = async (e: FormEvent) => {
     e.preventDefault();
+    if (!selectedService) {
+      setFormError('No repair service package is currently available. Please contact us via WhatsApp.');
+      return;
+    }
     if (!customerName.trim()) {
       setFormError('Please enter your Full Name.');
       return;
@@ -356,8 +366,18 @@ export function BookRepairPage() {
 
               {/* Service Package Radio Rows */}
               <div className="mt-4 space-y-2.5">
-                {visibleServices.map((pkg) => {
-                  const isSelected = pkg.id === selectedService.id;
+                {visibleServices.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-5 py-8 text-center">
+                    <p className="text-xs font-bold text-slate-800">
+                      No repair services listed yet
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Service packages added in the Admin Console will appear here automatically.
+                    </p>
+                  </div>
+                ) : (
+                  visibleServices.map((pkg) => {
+                    const isSelected = pkg.id === selectedService?.id;
                   return (
                     <button
                       key={pkg.id}
@@ -408,7 +428,7 @@ export function BookRepairPage() {
                       </span>
                     </button>
                   );
-                })}
+                }))}
               </div>
             </section>
 
@@ -613,7 +633,7 @@ export function BookRepairPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-bold text-slate-900">
-                        {selectedService.name}
+                        {selectedService ? selectedService.name : 'No service selected'}
                       </p>
                       <p className="mt-0.5 text-[11px] text-slate-400">
                         {deviceType === 'laptop'
@@ -622,7 +642,7 @@ export function BookRepairPage() {
                       </p>
                     </div>
                     <span className="shrink-0 font-bold text-slate-900">
-                      Rs. {selectedService.price.toFixed(2)}
+                      Rs. {(selectedService?.price ?? 0).toFixed(2)}
                     </span>
                   </div>
 
@@ -682,7 +702,7 @@ export function BookRepairPage() {
                     </span>
                     <span className="text-lg font-extrabold text-[#0284c7]">
                       Rs. {totalDue.toFixed(2)}
-                      {selectedService.plus_parts ? '*' : ''}
+                      {selectedService?.plus_parts ? '*' : ''}
                     </span>
                   </div>
                 </div>
@@ -694,7 +714,7 @@ export function BookRepairPage() {
                       Turnaround
                     </p>
                     <p className="mt-0.5 text-[11px] font-bold text-slate-900">
-                      {selectedService.turnaround}
+                      {selectedService?.turnaround ?? 'TBD'}
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3">
@@ -831,7 +851,7 @@ export function BookRepairPage() {
                 <div className="flex justify-between gap-2">
                   <dt className="text-slate-400">Service:</dt>
                   <dd className="font-semibold text-slate-900">
-                    {selectedService.name}
+                    {selectedService?.name ?? 'Repair Service'}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-2">
