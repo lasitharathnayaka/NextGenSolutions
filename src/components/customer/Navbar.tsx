@@ -308,7 +308,7 @@ export function Navbar() {
               Software
             </NavLink>
             <Link
-              to="/product/dell-latitude-7430"
+              to="/product"
               className={cn(
                 'rounded-md px-3 py-1.5 text-xs font-medium transition',
                 isProductRoute
@@ -512,7 +512,7 @@ export function Navbar() {
               Software
             </NavLink>
             <Link
-              to="/product/dell-latitude-7430"
+              to="/product"
               onClick={() => setMobileMenuOpen(false)}
               className={cn(
                 'rounded-md px-3 py-2 text-sm font-medium transition',

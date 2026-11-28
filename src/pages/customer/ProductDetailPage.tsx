@@ -49,9 +49,13 @@ export function ProductDetailPage() {
   const { user } = useAuth();
 
   const [liveProducts, setLiveProducts] = useState<DbProduct[]>([]);
+  const [productsLoaded, setProductsLoaded] = useState(!isFirebaseConfigured);
 
   useEffect(() => {
-    const unsub = subscribeProducts((rows) => setLiveProducts(rows));
+    const unsub = subscribeProducts((rows) => {
+      setLiveProducts(rows);
+      setProductsLoaded(true);
+    });
     return () => unsub();
   }, []);
 
@@ -251,6 +255,39 @@ export function ProductDetailPage() {
     setReviewImageError(null);
     setReviewModalOpen(false);
   };
+
+  if (isFirebaseConfigured && !productsLoaded) {
+    return (
+      <div className="bg-[#f8fafc] py-24 text-center">
+        <p className="text-sm font-semibold text-slate-500">
+          Loading product details...
+        </p>
+      </div>
+    );
+  }
+
+  if (isFirebaseConfigured && !matchedDbByParam) {
+    return (
+      <div className="bg-[#f8fafc] px-4 py-24">
+        <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <h1 className="text-lg font-extrabold text-slate-900">
+            {id ? 'Product Not Found' : 'No Product Selected'}
+          </h1>
+          <p className="mt-2 text-xs leading-relaxed text-slate-500">
+            {id
+              ? 'This product is no longer in our active inventory. Please select an available item from the catalog.'
+              : 'Browse our hardware catalog and select a device to inspect its full specifications, warranty, and pricing.'}
+          </p>
+          <Link
+            to="/catalog"
+            className="mt-5 inline-flex items-center justify-center rounded-xl bg-[#0284c7] px-5 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-[#0369a1] transition"
+          >
+            Browse Hardware Catalog
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-[#f8fafc]">
